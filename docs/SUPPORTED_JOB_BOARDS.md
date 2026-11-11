@@ -170,3 +170,21 @@ When adding a new provider, add a new non-helper module under `providers/` and
 update this table in the same PR — see
 [Adding a provider](../providers/ADDING_A_PROVIDER.md) for the full
 requirements.
+
+### LinkedIn guest search (sandbox override)
+
+Explicit `provider: linkedin` reads one public guest search result page per
+entry. Set `api` to
+`https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=Engineer&location=Portugal`.
+Allowed query keys: `keywords`, `location`, `geoId`, `f_TPR`, `f_WT`.
+No authentication, cookies, detail requests, pagination or challenge bypass.
+The browser User-Agent is shared with other providers. Requests across entries
+are serialized at least five seconds apart. A 429 permits one retry after at
+least 60 seconds (respecting Retry-After); longer waits, repeated 429s, HTTP
+blocks, redirects and challenges produce a provider error and at least a
+15-minute in-process cooldown. Probes never retry. Scan records these errors
+rather than treating blocks as empty boards. Coverage is intentionally bounded
+to the returned guest page; Easy Apply status is not inferred.
+
+This adapter is enabled under Miguel's explicit 2026-11-11 t205 sandbox
+override of the LinkedIn robots.txt / CONTRIBUTING exclusion only.

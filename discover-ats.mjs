@@ -51,6 +51,8 @@ import bamboohr from './providers/bamboohr.mjs';
 import pinpoint from './providers/pinpoint.mjs';
 import rippling from './providers/rippling.mjs';
 import joinProvider from './providers/join.mjs';
+import teamtailor from './providers/teamtailor.mjs';
+import personio from './providers/personio.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 import { getCareerOpsRoot } from './path-resolver.mjs';
 import { DEFAULT_SMALL_THRESHOLD, isSmallBoard, smallBoardDetail } from './lib/small-board.mjs';
@@ -105,6 +107,8 @@ const VENDORS = {
   recruitee:       { id: 'recruitee',       provider: recruitee,       hostFor: (s) => `${lower(s)}.recruitee.com`,  buildUrl: (s) => `https://${lower(s)}.recruitee.com` },
   breezy:          { id: 'breezy',          provider: breezy,          hostFor: (s) => `${lower(s)}.breezy.hr`,      buildUrl: (s) => `https://${lower(s)}.breezy.hr` },
   bamboohr:        { id: 'bamboohr',        provider: bamboohr,        hostFor: (s) => `${lower(s)}.bamboohr.com`,   buildUrl: (s) => `https://${lower(s)}.bamboohr.com` },
+  teamtailor:      { id: 'teamtailor', provider: teamtailor, hostFor: (s) => `${lower(s)}.teamtailor.com`, buildUrl: (s) => `https://${lower(s)}.teamtailor.com` },
+  personio:        { id: 'personio', provider: personio, hostFor: (s) => `${lower(s)}.jobs.personio.de`, buildUrl: (s) => `https://${lower(s)}.jobs.personio.de` },
   pinpoint:        { id: 'pinpoint',        provider: pinpoint,        hostFor: (s) => `${lower(s)}.pinpointhq.com`, buildUrl: (s) => `https://${lower(s)}.pinpointhq.com` },
 };
 // Slug-resolvable vendors, probed in order for each company (first match wins).
@@ -117,7 +121,7 @@ const VENDORS = {
 // A company on no supported board is the case that got more expensive: it now
 // probes every vendor before giving up, which is the honest price of the extra
 // coverage.
-const VENDOR_ORDER = ['gh', 'ashby', 'lever', 'workable', 'smartrecruiters', 'recruitee', 'bamboohr', 'breezy', 'pinpoint', 'rippling', 'join'];
+const VENDOR_ORDER = ['gh', 'ashby', 'lever', 'workable', 'smartrecruiters', 'recruitee', 'bamboohr', 'breezy', 'pinpoint', 'rippling', 'join', 'teamtailor', 'personio'];
 
 // Workday instance subdomains, most common first. Used only when the user gives
 // a tenant + site but no instance: we try each `<tenant>.<inst>.myworkdayjobs.com`
@@ -140,7 +144,7 @@ portals.yml is a user-layer file: this command NEVER writes it unless you pass
 --write. The default previews the entries it would add (see pendingEntries).
 
 Vendors: gh, ashby, lever, workable, smartrecruiters, recruitee, bamboohr,
-breezy, pinpoint, rippling, join (all resolve from a name/slug) and workday
+breezy, pinpoint, rippling, join, teamtailor, personio (all resolve from a name/slug) and workday
 (resolves from a coordinate hint — a name alone can't locate a Workday site).
 Default: all of them, probed in that order, first match wins.
 

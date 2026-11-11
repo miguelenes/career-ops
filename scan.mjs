@@ -84,6 +84,7 @@ import { sectionKind } from './lib/pipeline-sections.mjs';
 import { promoteKnownFragmentIdentity, LANGUAGE_PARAMS, languageSubtag } from './url-key.mjs';
 import { getCareerOpsRoot, getProfilePath, hasProfileOverride } from './path-resolver.mjs';
 import { checkLivenessViaApi } from './liveness-api.mjs';
+import { checkAggregatorOriginal } from './aggregator-liveness.mjs';
 import { linkedInJobId } from './lib/linkedin-url.mjs';
 import { resolveExperienceFilter, applyExperienceFilter } from './jd-years.mjs';
 
@@ -4860,7 +4861,7 @@ async function main() {
         // Compare requisitions only in overlapping locations: the exact key,
         // truly locationless wildcard rows, and (for a locationless candidate)
         // the prebuilt aggregate of located rows. An unknown ID keeps the
-        // historical duplicate decision. Aggregators use URL dedup only.
+        // historical duplicate decision. Named employers also match across feeds.
         const baseKey = companyRoleDedupKey(job.company, job.title, canonicalizeCompany);
         // No employer, no company+role identity. A board that cannot name a
         // posting's employer returns `company: ''` (providers/_types.js allows
@@ -4868,9 +4869,10 @@ async function main() {
         // then stood for every unnamed employer at once: a second "Senior
         // Software Engineer" from a different company was dropped as a
         // duplicate of the first. Seeding already skips such rows
-        // (collectSeenCompanyRoles), so they dedup by URL only, as an
-        // aggregator's do.
-        const key = company.aggregator === true || !canonicalizeCompany(job.company)
+        // (collectSeenCompanyRoles), so they dedup by URL only, as a
+        // feed that only names itself does.
+        const key = !canonicalizeCompany(job.company)
+          || (company.aggregator === true && canonicalizeCompany(job.company) === canonicalizeCompany(company.name))
           ? null
           : (dedupIncludeLocation
             ? companyRoleDedupKey(job.company, job.title, canonicalizeCompany, job.location)
@@ -4882,6 +4884,24 @@ async function main() {
         requisition, dedupIncludeLanguage ? language : [])) {
           totalDupes++;
           continue;
+        }
+        // A feed's timestamp is not evidence that the employer is still hiring.
+        // Check only after cheap filters/dedup, and do not pin uncertain results.
+        if (provider.id === 'himalayas' || job.originalUrl) {
+          const verdict = await checkAggregatorOriginal(job, { ctx });
+          if (verdict.result !== 'active') {
+            console.log(`  Deferred aggregator posting (${verdict.result}): ${job.company} — ${job.title}`);
+            continue;
+          }
+          // Other boards can publish this identity while the request awaits.
+          if (!newLanguageVersion && (isOfferSeen(job, seenUrls, dedupSnapshot.identityPromotableUrls)
+            || matchesSeenCompanyRole({ key, baseKey, seen: seenCompanyRoles,
+              requisitions: seenCompanyRoleRequisitions, locatedRequisitions: locatedRequisitionsByBase,
+              languages: seenCompanyRoleLanguages, locatedLanguages: locatedLanguagesByBase },
+            requisition, dedupIncludeLanguage ? language : []))) {
+            totalDupes++;
+            continue;
+          }
         }
         const cooldownResult = cooldownFilter(job);
         if (cooldownResult.skip) {

@@ -639,7 +639,8 @@ export function isRefusedRedirectError(err) {
 
 /**
  * Whether a failed request is worth retrying: 429, any 5xx, or a transport
- * error (no status — timeout/abort/DNS). A 4xx other than 429 is the server
+ * error (no status — timeout/abort/connection). DNS failures surface to the
+ * caller so a sweep can stop on a resolver outage. A 4xx other than 429 is the server
  * telling us the request itself is wrong, and retrying it just burns time.
  *
  * A refused redirect (redirect:'error' meeting a 3xx) surfaces as a bare
@@ -652,6 +653,10 @@ export function isRefusedRedirectError(err) {
  */
 export function isRetryableError(err) {
   const status = err?.status;
+  // Board retries cannot repair a missing host or an unavailable resolver.
+  // Surface these promptly to the full sweep's resolver circuit breaker.
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(err?.code)
+    || ['ENOTFOUND', 'EAI_AGAIN'].includes(err?.cause?.code)) return false;
   if (status === 429) return true;
   if (typeof status === 'number' && status >= 500) return true;
   if (isRefusedRedirectError(err)) return false;

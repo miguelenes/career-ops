@@ -73,8 +73,8 @@ try {
   };
   const jobs = parseHimalayasResponse(sample);
 
-  if (jobs.length === 2) pass('parseHimalayasResponse keeps 2 jobs (drops missing/off-host/http/blank-title rows)');
-  else fail(`parseHimalayasResponse returned ${jobs.length} jobs (expected 2)`);
+  if (jobs.length === 3) pass('parseHimalayasResponse keeps employer HTTPS links, drops missing/http/blank-title rows');
+  else fail(`parseHimalayasResponse returned ${jobs.length} jobs (expected 3)`);
 
   if (jobs[0]?.title === 'Staff AI Engineer' && jobs[0]?.company === 'Acme Labs') {
     pass('parseHimalayasResponse trims title and companyName');

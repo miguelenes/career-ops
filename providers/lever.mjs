@@ -1,6 +1,7 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 import { coerceId } from './_ids.mjs';
+import { fetchJsonWithRetry } from './_http.mjs';
 import { htmlToText } from './_html-to-text.mjs';
 
 // Lever provider — hits the public postings endpoint.
@@ -124,7 +125,7 @@ export default {
     const apiUrl = resolveApiUrl(entry);
     if (!apiUrl) throw new Error(`lever: cannot derive API URL for ${entry.name}`);
     assertLeverUrl(apiUrl);
-    const json = await ctx.fetchJson(apiUrl, { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS });
+    const json = await fetchJsonWithRetry(ctx, apiUrl, { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS }, ctx.maxPages ? { retries: 0 } : {});
     if (!Array.isArray(json)) return [];
     const boardSlug = new URL(apiUrl).pathname.match(/^\/v0\/postings\/([^/]+)\/?$/)?.[1] || '';
     return json.map(j => ({

@@ -17,6 +17,7 @@
  *
  * @typedef {object} Job
  * @property {string} title    Required, non-empty after trim.
+ * @property {string} [originalUrl] Employer posting URL exposed by an aggregator.
  * @property {string} url      Required, absolute URL — used as the dedup key.
  * @property {string} company  May be empty when the source can't expose it
  *                             at the list-page level; populated downstream.

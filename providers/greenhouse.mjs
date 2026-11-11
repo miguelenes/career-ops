@@ -10,6 +10,10 @@
 
 import { htmlToText } from './_html-to-text.mjs';
 import { coerceId } from './_ids.mjs';
+import { fetchJsonWithRetry } from './_http.mjs';
+
+// Full content responses on large boards need time to finish reading the body.
+export const GREENHOUSE_TIMEOUT_MS = 30_000;
 
 const LEGACY_BOARD_HOSTS = new Set(['boards.greenhouse.io', 'boards.eu.greenhouse.io']);
 const JOB_BOARD_HOSTS = new Set(['job-boards.greenhouse.io', 'job-boards.eu.greenhouse.io']);
@@ -196,7 +200,7 @@ export default {
     // expensive request.
     const listUrl = new URL(apiUrl);
     listUrl.searchParams.delete('content');
-    const json = /** @type {any} */ (await ctx.fetchJson(assertGreenhouseUrl(listUrl.href), { redirect: 'error' }));
+    const json = /** @type {any} */ (await fetchJsonWithRetry(ctx, assertGreenhouseUrl(listUrl.href), { redirect: 'error', timeoutMs: GREENHOUSE_TIMEOUT_MS }, ctx.maxPages ? { retries: 0 } : {}));
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
     return jobs
       .filter(/** @param {any} j */ j => j.absolute_url)
@@ -217,7 +221,7 @@ export default {
     const listHref = assertGreenhouseUrl(listUrl.href);
     // redirect:'error' prevents SSRF via server-side redirects; combined with
     // assertGreenhouseUrl above it guarantees the final hostname stays in the allowlist.
-    const json = /** @type {any} */ (await ctx.fetchJson(listHref, { redirect: 'error' }));
+    const json = /** @type {any} */ (await fetchJsonWithRetry(ctx, listHref, { redirect: 'error', timeoutMs: GREENHOUSE_TIMEOUT_MS }, ctx.maxPages ? { retries: 0 } : {}));
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
     const usable = jobs.filter(/** @param {any} j */ j => j.absolute_url);
     const boardSlug = new URL(apiUrl).pathname.match(/^\/v1\/boards\/([^/]+)\/jobs\/?$/)?.[1] || '';

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>ITJobs - Pesquisa em emprego por "php"</title>
+    <link>https://www.itjobs.pt/feed/emprego</link>
+    <description></description>
+    <pubDate>Thu, 29 Oct 2026 11:24:23 +0000</pubDate>
+    <managingEditor>itjobs@itjobs.pt (ITJobs)</managingEditor>
+    <language>pt</language>
+    <image>
+      <url>https://static.itjobs.pt/images/logo.png</url>
+      <title>ITJobs - Pesquisa em emprego por "php"</title>
+      <link>https://www.itjobs.pt/feed/emprego</link>
+      <width>144</width>
+      <height>60</height>
+    </image>
+    <item>
+      <title><![CDATA[MariaDB Database Administrator]]></title>
+      <link>https://www.itjobs.pt/oferta/518616/mariadb-database-administrator-remote</link>
+      <description><![CDATA[Função: MariaDB Database Administrator<br />
+Empresa: Dellent<br />
+Tipo: Full-time<br />
+Contrato: n/d<br />
+Localidade: Porto<br />
+Modelo de trabalho: Remoto<br />
+Salário anual: n/d]]></description>
+      <guid isPermaLink="false">https://www.itjobs.pt/oferta/518616/mariadb-database-administrator-remote</guid>
+      <pubDate>Thu, 29 Oct 2026 11:24:23 +0000</pubDate>
+    </item>
+<item>
+      <title><![CDATA[Senior Backend Developer]]></title>
+      <link>https://www.itjobs.pt/oferta/518518/senior-backend-developer</link>
+      <description><![CDATA[Função: Senior Backend Developer<br />
+Empresa: Anónimo<br />
+Tipo: n/d<br />
+Contrato: n/d<br />
+Localidade: n/d<br />
+Modelo de trabalho: Remoto<br />
+Salário anual: n/d]]></description>
+      <guid isPermaLink="false">https://www.itjobs.pt/oferta/518518/senior-backend-developer</guid>
+      <pubDate>Mon, 26 Oct 2026 13:44:03 +0000</pubDate>
+    </item>
+<item>
+      <title><![CDATA[Senior Fullstack PHP Developer]]></title>
+      <link>https://www.itjobs.pt/oferta/517578/senior-fullstack-php-developer</link>
+      <description><![CDATA[Função: Senior Fullstack PHP Developer<br />
+Empresa: Neotalent Conclusion<br />
+Tipo: Full-time<br />
+Contrato: Contrato sem termo<br />
+Localidade: Lisboa<br />
+Modelo de trabalho: Híbrido<br />
+Salário anual: n/d]]></description>
+      <guid isPermaLink="false">https://www.itjobs.pt/oferta/517578/senior-fullstack-php-developer</guid>
+      <pubDate>Mon, 26 Oct 2026 13:42:17 +0000</pubDate>
+    </item>
+</channel>
+</rss>

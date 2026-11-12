@@ -5935,9 +5935,7 @@ function rollback() {
     // The restored tree no longer contains the withheld update snapshot.
     clearStagedUpdate();
 
-    // package.json is back at the backup's version, but node_modules still
-    // holds what the update installed, and package-lock.json is not tracked,
-    // so the backup did not carry one to restore.
+    // Restore dependencies to the package manifest and lockfile from the backup.
     const dependencies = refreshDependencies();
 
     const summary = `Restored ${restored.length} file(s) from ${latest}, removed ${removed.length} target-only file(s).`;

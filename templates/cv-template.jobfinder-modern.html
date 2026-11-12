@@ -189,14 +189,11 @@ version: 2.0.0
   .job { margin-bottom: 10px; }
   .job:last-child { margin-bottom: 0; }
 
-  .job-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
-  }
+  /* Separate lines keep mixed CJK/Latin dates in PDF reading order. */
+  .job-header { display: block; }
 
   .job-company {
+    display: block;
     font-size: 12.5px;
     font-weight: 700;
     text-transform: uppercase;
@@ -205,6 +202,7 @@ version: 2.0.0
   }
 
   .job-period {
+    display: block;
     font-size: 10px;
     font-weight: 600;
     color: #64748b;              /* muted slate */
@@ -386,6 +384,11 @@ version: 2.0.0
   html[lang="ar"] .job ul { padding-right: 15px; padding-left: 0; }
   html[lang="ar"] .cv-photo { float: left; margin: 2px 16px 8px 0; }
   html[lang="ar"] .cert-year { text-align: left; }
+
+  /* Use one font for both digits and CJK date units. Mixed fallback baselines
+     otherwise cause Poppler to extract the units before the numeric dates. */
+  html[lang="zh-CN"] .job-period,
+  html[lang="zh"] .job-period { font-family: 'Noto Sans CJK SC', sans-serif; }
 
   /* === CJK fallback === */
   html[lang="ja"] body {

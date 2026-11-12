@@ -78,5 +78,35 @@
     "zh-short-photo": 1,
     "zh-long-no-photo": 2,
     "zh-long-photo": 2
+  },
+  "classic": {
+    "en-long-no-photo": 2,
+    "en-long-photo": 2,
+    "en-short-no-photo": 1,
+    "en-short-photo": 1,
+    "zh-long-no-photo": 2,
+    "zh-long-photo": 2,
+    "zh-short-no-photo": 1,
+    "zh-short-photo": 1
+  },
+  "compact-teal": {
+    "en-long-no-photo": 2,
+    "en-long-photo": 2,
+    "en-short-no-photo": 1,
+    "en-short-photo": 1,
+    "zh-long-no-photo": 2,
+    "zh-long-photo": 2,
+    "zh-short-no-photo": 1,
+    "zh-short-photo": 1
+  },
+  "jobfinder-modern": {
+    "en-long-no-photo": 2,
+    "en-long-photo": 2,
+    "en-short-no-photo": 1,
+    "en-short-photo": 1,
+    "zh-long-no-photo": 2,
+    "zh-long-photo": 2,
+    "zh-short-no-photo": 1,
+    "zh-short-photo": 1
   }
 }

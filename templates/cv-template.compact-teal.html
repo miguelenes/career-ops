@@ -10,11 +10,8 @@ version: 2.0.0
 <style>
   /* ── Compact Teal ───────────────────────────────────────────────────────────
      Job Finder's "Compact" approval theme: a tight two-tone layout — deep teal
-     header band and light teal section bars — with each role's dates in a left
-     column of a CSS grid. One DOM text flow: the grid only places blocks, it
-     never duplicates or reorders content into parallel tracks, and no layout
-     table element is used anywhere, so ATS extractors read the document top
-     to bottom.
+     header band and light teal section bars. A single block flow keeps dates,
+     roles and project tools in reading order, including across page breaks.
 
      ATS discipline is identical to templates/cv-template.html and is NOT
      negotiable: a static system font stack (never the bundled variable woff2
@@ -47,9 +44,6 @@ version: 2.0.0
        one unit, never split", which removes the one-word widow a description
        can leave above its tech line, at the cost of a bottom gap. */
     --project-break-inside: auto;
-    /* Width of the left date column. "Sep 2013 - Aug 2016" at 9.5px Liberation
-       Sans is ~88px; 96px holds every date the payload spells without wrapping. */
-    --date-column: 96px;
   }
   @page { margin: var(--page-margin); }
 
@@ -185,133 +179,35 @@ version: 2.0.0
   }
   .competency-tag:last-child::after { content: ""; }
 
-  /* === WORK EXPERIENCE ===
-     The signature layout: every role is a CSS grid with the dates in a left
-     column and the company, role, context and bullets to its right. The grid
-     PLACES blocks; the DOM stays one flow (company, dates, role, context,
-     location, bullets), and the builder's markup is untouched — `display:
-     contents` promotes the .job-header spans straight into the grid so no
-     wrapper boxes are reordered. */
-  .job {
-    display: grid;
-    grid-template-columns: var(--date-column) 1fr;
-    column-gap: 10px;
-    margin-bottom: 8px;
-  }
+  /* Keep dates and project tools on separate lines. Parallel grid tracks
+     interleave in PDF text extraction and prevent reliable page fragmentation. */
+  .job { margin-bottom: 8px; }
   .job:last-child { margin-bottom: 0; }
-
-  /* The builder's two-row header becomes its two spans, placed directly. */
-  .job-header { display: contents; }
-
-  .job-company {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: 11.5px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    color: var(--accent-ink);
-    align-self: baseline;
-  }
-
-  .job-period {
-    grid-column: 1;
-    grid-row: 1;
-    font-size: 9.5px;
-    font-weight: 700;
-    color: var(--muted-color);
-    white-space: nowrap;
-    align-self: baseline;
-  }
-
-  .job-role {
-    grid-column: 2;
-    grid-row: 2;
-    font-size: 11px;
-    font-weight: 700;
-    color: #1b1b1b;
-    margin-top: 1px;
-  }
-
-  .job-context {
-    grid-column: 2;
-    font-style: italic;
-    font-size: 10px;
-    line-height: 1.4;
-    color: var(--muted-color);
-    margin-top: 1px;
-  }
-
-  .job-location {
-    grid-column: 2;
-    font-size: 9.5px;
-    color: var(--muted-color);
-    text-align: right;
-  }
-
-  .job ul {
-    grid-column: 2;
-    margin-top: 2px;
-    padding-left: 13px;
-  }
-
+  .job-header { display: block; }
+  .job-company { display: block; font-size: 11.5px; font-weight: 800;
+    text-transform: uppercase; color: var(--accent-ink); }
+  .job-period { display: block; font-size: 9.5px; font-weight: 700;
+    color: var(--muted-color); }
+  .job-role { font-size: 11px; font-weight: 700; margin-top: 1px; }
+  .job-context { font-style: italic; font-size: 10px; line-height: 1.4;
+    color: var(--muted-color); margin-top: 1px; }
+  .job-location { font-size: 9.5px; color: var(--muted-color); }
+  .job ul { margin-top: 2px; padding-left: 13px; }
   .job li { margin-bottom: 1.5px; }
 
-  /* === PROJECTS ===
-     Same left-column grid: the project's tech line sits in the date slot. */
-  .project {
-    display: grid;
-    grid-template-columns: var(--date-column) 1fr;
-    column-gap: 10px;
-    margin-bottom: 6px;
-  }
+  .project { margin-bottom: 6px; }
+  .project-title { font-size: 11px; font-weight: 700; color: var(--accent-ink); }
+  .project-badge { font-size: 9px; font-weight: 600; color: var(--muted-color); margin-left: 6px; }
+  .project-desc { margin-top: 1px; }
+  .project-tech { font-size: 9.5px; color: var(--muted-color); margin-top: 1px; }
 
-  .project-title {
-    grid-column: 2;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent-ink);
-  }
-
-  .project-badge {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--muted-color);
-    margin-left: 6px;
-  }
-
-  .project-desc { grid-column: 2; margin-top: 1px; }
-
-  .project-tech { grid-column: 1; grid-row: 2; font-size: 9.5px; color: var(--muted-color); margin-top: 1px; }
-
-  /* === EDUCATION ===
-     Same grid: the year in the left column, the degree beside it. */
-  .edu-item {
-    display: grid;
-    grid-template-columns: var(--date-column) 1fr;
-    column-gap: 10px;
-    margin-bottom: 5px;
-  }
-
-  .edu-header { display: contents; }
-
-  .edu-title { grid-column: 2; font-weight: 700; color: #1b1b1b; }
-
+  .edu-item { margin-bottom: 5px; }
+  .edu-header { display: block; }
+  .edu-title { display: block; font-weight: 700; color: #1b1b1b; }
   .edu-org { font-weight: 400; color: #23272c; }
-
-  .edu-year {
-    grid-column: 1;
-    grid-row: 1;
-    font-size: 9.5px;
-    font-weight: 700;
-    color: var(--muted-color);
-    white-space: nowrap;
-    align-self: baseline;
-  }
-
-  .edu-location { grid-column: 2; font-size: 9.5px; color: var(--muted-color); }
-
-  .edu-desc { grid-column: 2; margin-top: 1px; color: #33383e; }
+  .edu-year { display: block; font-size: 9.5px; font-weight: 700; color: var(--muted-color); }
+  .edu-location { font-size: 9.5px; color: var(--muted-color); }
+  .edu-desc { margin-top: 1px; color: #33383e; }
 
   /* === CERTIFICATIONS === */
   .cert-table,

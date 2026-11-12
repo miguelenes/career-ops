@@ -134,7 +134,8 @@ export default {
  * Shape: `{ jobs: [...] }`, where each job currently carries `title`,
  * `companyName`, `locationRestrictions`, `applicationLink`, `guid`,
  * `pubDate`, and `companySlug`. `applicationLink` is preferred over `guid`
- * and used as the dedup key after HTTPS + host validation.
+ * and used as the dedup key after HTTPS validation. Employer links are also
+ * exposed as originalUrl so scan can verify the original before publishing.
  *
  * @param {unknown} json - raw parsed API response
  * @returns {Array<{title: string, url: string, company: string, location: string, postedAt?: number}>}
@@ -149,12 +150,20 @@ export function parseHimalayasResponse(json) {
     const title = cleanText(item.title);
     if (!title) continue;
 
-    const url = cleanHimalayasUrl(item.applicationLink) || cleanHimalayasUrl(item.guid);
+    // Prefer the employer's HTTPS application URL over the syndicated copy.
+    let originalUrl;
+    try {
+      const upstream = new URL(cleanText(item.applicationLink));
+      if (upstream.protocol === 'https:' && !upstream.username && !upstream.password
+        && upstream.hostname !== TRUSTED_HOST && !upstream.hostname.endsWith(`.${TRUSTED_HOST}`)) originalUrl = upstream.href;
+    } catch { /* no upstream link supplied */ }
+    const url = originalUrl || cleanHimalayasUrl(item.applicationLink) || cleanHimalayasUrl(item.guid);
     if (!url) continue;
 
     jobs.push({
       title,
       url,
+      ...(originalUrl ? { originalUrl } : {}),
       company: cleanText(item.companyName),
       location: locationText(item.locationRestrictions),
       postedAt: toEpochMs(item.pubDate),

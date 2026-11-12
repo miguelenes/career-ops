@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { ROOT, getBash, rmSync } from './helpers.mjs';
+import { ROOT, getBash, rmSync, toBashPath } from './helpers.mjs';
 
 function run(body) {
   const root = mkdtempSync(join(tmpdir(), 'batch-lock-generation-'));
@@ -26,11 +26,32 @@ wait_for() { for ((i=0;i<500;i++)); do [[ -f "$1" ]] && return 0; sleep 0.01; do
 ! kill -0 99999999 2>/dev/null
 ${body}
 `);
-    const result = spawnSync(getBash(), [join(root, 'probe.sh'), root], { encoding: 'utf8', timeout: 15000 });
+    const result = spawnSync(getBash(), [toBashPath(join(root, 'probe.sh')), toBashPath(root)], { encoding: 'utf8', timeout: 15000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }));
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
+
+// Native Windows paths must be converted before Bash appends /lock or globs owner files.
+test('batch state lock creates owner metadata and removes its directory on release', () => run(`
+acquire_state_lock
+[[ -d "$STATE_LOCK_DIR" ]]
+[[ -f "$STATE_LOCK_OWNED_FILE" ]]
+owner_pid=$BASHPID
+[[ "$(cut -f1 "$STATE_LOCK_OWNED_FILE")" == "$owner_pid" ]]
+release_state_lock
+[[ ! -d "$STATE_LOCK_DIR" ]]
+`));
+
+test('batch state lock fails closed when a file prevents directory creation', () => run(`
+touch "$STATE_LOCK_DIR"
+if acquire_state_lock; then
+  echo 'lock acquisition unexpectedly succeeded' >&2
+  exit 1
+fi
+[[ -f "$STATE_LOCK_DIR" ]]
+[[ "\${STATE_LOCK_OWNED:-0}" == 0 ]]
+`));
 
 test('a stale batch-lock reader cannot remove a live successor owner', () => run(`
 mkdir "$STATE_LOCK_DIR"

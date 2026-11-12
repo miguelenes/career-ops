@@ -216,6 +216,7 @@ export const PORTAL_TOP_LEVEL_KEYS = [
   'title_filter_full',
   'title_filter_overrides',
   'search_queries',
+  'source_priority',
   'tracked_companies',
   'job_boards',
   'scan_history',

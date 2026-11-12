@@ -86,7 +86,7 @@ function hanFallbackLast(decl) {
   const first = faces[0];
   return (generic === 'sans-serif' || generic === 'serif')
     && (han === "'Arial Unicode MS'" || han === '"Arial Unicode MS"')
-    && (first.includes('Liberation') || first === '"Helvetica"');
+    && (first.includes('Liberation') || first === '"Helvetica"' || first === '"Times New Roman"');
 }
 
 const templates = listTree(join(ROOT, 'templates'), { match: /\.html$/ });

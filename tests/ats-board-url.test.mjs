@@ -39,12 +39,14 @@ import joinProvider from '../providers/join.mjs';
 import recruitee from '../providers/recruitee.mjs';
 import breezy from '../providers/breezy.mjs';
 import bamboohr from '../providers/bamboohr.mjs';
+import teamtailor from '../providers/teamtailor.mjs';
+import personio from '../providers/personio.mjs';
 import pinpoint from '../providers/pinpoint.mjs';
 import workday from '../providers/workday.mjs';
 
 const PROVIDERS = {
   greenhouse, ashby, lever, workable, smartrecruiters, rippling, join: joinProvider,
-  recruitee, breezy, bamboohr, pinpoint, workday,
+  recruitee, breezy, bamboohr, teamtailor, personio, pinpoint, workday,
 };
 
 // Every ATS, every region, every Workday host form, with the URL each must build.
@@ -62,15 +64,17 @@ const FORMS = [
   [{ ats: 'recruitee', board: 'acme' }, 'https://acme.recruitee.com'],
   [{ ats: 'breezy', board: 'acme' }, 'https://acme.breezy.hr'],
   [{ ats: 'bamboohr', board: 'acme' }, 'https://acme.bamboohr.com'],
+  [{ ats: 'teamtailor', board: 'acme' }, 'https://acme.teamtailor.com'],
+  [{ ats: 'personio', board: 'acme' }, 'https://acme.jobs.personio.de'],
   [{ ats: 'pinpoint', board: 'acme' }, 'https://acme.pinpointhq.com'],
   [{ ats: 'workday', workday_host: 'jobs', board: 'acme/wd5/External_Careers' }, 'https://acme.wd5.myworkdayjobs.com/External_Careers'],
   [{ ats: 'workday', workday_host: 'site', board: 'acme/wd1/AcmeCareers' }, 'https://wd1.myworkdaysite.com/recruiting/acme/AcmeCareers'],
 ];
 
-test('the closed ATS list is the twelve that discovery can resolve', () => {
+test('the closed ATS list is the vendors that discovery can resolve', () => {
   assert.deepEqual([...BOARD_ATS], [
     'greenhouse', 'ashby', 'lever', 'workable', 'smartrecruiters', 'rippling', 'join',
-    'recruitee', 'breezy', 'bamboohr', 'pinpoint', 'workday',
+    'recruitee', 'breezy', 'bamboohr', 'teamtailor', 'personio', 'pinpoint', 'workday',
   ]);
   assert.deepEqual(Object.keys(PROVIDERS).sort(), [...BOARD_ATS].sort());
 });
@@ -105,7 +109,7 @@ test('detect() reads the board the URL names: region, case and Workday coordinat
 });
 
 test('subdomain vendors lowercase the board; Ashby keeps its case', () => {
-  for (const ats of ['recruitee', 'breezy', 'bamboohr', 'pinpoint']) {
+  for (const ats of ['recruitee', 'breezy', 'bamboohr', 'teamtailor', 'personio', 'pinpoint']) {
     assert.equal(new URL(buildBoardUrl({ ats, board: 'AcmeCo' })).hostname.split('.')[0], 'acmeco', ats);
   }
   assert.equal(buildBoardUrl({ ats: 'ashby', board: 'DeepL' }), 'https://jobs.ashbyhq.com/DeepL');

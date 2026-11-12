@@ -10,7 +10,7 @@
       "properties": {
         "ats": {
           "description": "The ATS that hosts the board.",
-          "enum": ["greenhouse", "ashby", "lever", "workable", "smartrecruiters", "rippling", "join", "recruitee", "breezy", "bamboohr", "pinpoint", "workday"]
+          "enum": ["greenhouse", "ashby", "lever", "workable", "smartrecruiters", "rippling", "join", "recruitee", "breezy", "bamboohr", "teamtailor", "personio", "pinpoint", "workday"]
         },
         "region": {
           "description": "Greenhouse and Lever only: the region the board is hosted in.",

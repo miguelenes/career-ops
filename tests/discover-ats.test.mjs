@@ -124,6 +124,10 @@ eq('GH careers_url', b1.candidates[0].careers_url, 'https://job-boards.greenhous
 eq('Ashby careers_url', b1.candidates[1].careers_url, 'https://jobs.ashbyhq.com/adyen');
 eq('Lever careers_url', b1.candidates[2].careers_url, 'https://jobs.lever.co/adyen');
 
+const extraVendors = buildCandidateUrls({ name: 'Sample' }, ['teamtailor', 'personio']);
+eq('Teamtailor and Personio candidates', extraVendors.candidates.map(c => c.careers_url),
+  ['https://sample.teamtailor.com', 'https://sample.jobs.personio.de']);
+
 const b2 = buildCandidateUrls({ name: 'X', slug: 'bad/slug' });
 eq('unsafe slug builds NO candidate URLs (SSRF guard)', b2.candidates.length, 0);
 eq('unsafe slug records every vendor as skipped', b2.skipped.length, b1.candidates.length);

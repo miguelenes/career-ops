@@ -74,6 +74,8 @@ test('every ATS, region and Workday host form round-trips through its builder', 
     { ats: 'recruitee', board: 'acme' },
     { ats: 'breezy', board: 'acme' },
     { ats: 'bamboohr', board: 'acme' },
+    { ats: 'teamtailor', board: 'acme' },
+    { ats: 'personio', board: 'acme' },
     { ats: 'pinpoint', board: 'acme' },
     { ats: 'workday', board: 'acme/wd5/External_Careers', workday_host: 'jobs' },
     { ats: 'workday', board: 'acme/wd103/Careers', workday_host: 'site' },
@@ -207,7 +209,7 @@ test('importList: canonical inbox lines, every default written out; duplicates a
     [3, 'the same board as line 2'],
     [5, 'name contains an email address'],
     [6, 'website "not a domain" is not a domain name'],
-    [8, 'indeed.com is not a board host of a supported ATS (greenhouse, ashby, lever, workable, smartrecruiters, rippling, join, recruitee, breezy, bamboohr, pinpoint, workday)'],
+    [8, 'indeed.com is not a board host of a supported ATS (greenhouse, ashby, lever, workable, smartrecruiters, rippling, join, recruitee, breezy, bamboohr, teamtailor, personio, pinpoint, workday)'],
   ]);
   assert.equal(r.derivedNames, 1);
   assert.equal(r.rewritten, 2);
@@ -245,7 +247,7 @@ test('CLI: the 53 committed boards and new ones become an inbox the validator ac
     const inbox = join(dir, 'employers', 'inbox', '2026-11-10-octocat.ndjson');
     assert.equal(readFileSync(inbox, 'utf8').split('\n').filter(Boolean).length, known.length + 1);
     assert.equal(readFileSync(`${list}.rejected.csv`, 'utf8'), 'line,input,reason\n'
-      + '55,https://nope.example/jobs,"nope.example is not a board host of a supported ATS (greenhouse, ashby, lever, workable, smartrecruiters, rippling, join, recruitee, breezy, bamboohr, pinpoint, workday)"\n');
+      + '55,https://nope.example/jobs,"nope.example is not a board host of a supported ATS (greenhouse, ashby, lever, workable, smartrecruiters, rippling, join, recruitee, breezy, bamboohr, teamtailor, personio, pinpoint, workday)"\n');
 
     const v = node(VALIDATOR, [], dir);
     assert.equal(v.status, 0, v.stderr);

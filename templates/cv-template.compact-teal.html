@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<!-- career-ops-template
+name: Compact Teal
+version: 2.0.0
+-->
+<html lang="{{LANG}}">
+<head>
+<meta charset="UTF-8">
+<title>{{NAME}} — CV</title>
+<style>
+  /* ── Compact Teal ───────────────────────────────────────────────────────────
+     Job Finder's "Compact" approval theme: a tight two-tone layout — deep teal
+     header band and light teal section bars — with each role's dates in a left
+     column of a CSS grid. One DOM text flow: the grid only places blocks, it
+     never duplicates or reorders content into parallel tracks, and no layout
+     table element is used anywhere, so ATS extractors read the document top
+     to bottom.
+
+     ATS discipline is identical to templates/cv-template.html and is NOT
+     negotiable: a static system font stack (never the bundled variable woff2
+     fonts, whose glyph advances make PDF extractors inject spaces inside words)
+     and ligatures disabled (headless Chromium otherwise emits U+FB01/FB02 and a
+     literal keyword search for "verification" misses "veriﬁcation").
+
+     White-on-teal text is declared in this stylesheet only — never as an inline
+     colour attribute — which is the sanctioned header/badge shape verify-ats.mjs
+     describes: a white colour set inline on a text span is the stuffing trick it
+     rejects. */
+
+  :root {
+    --accent-color: #0d5f56;                   /* deep teal */
+    --accent-ink: #0b4a43;                     /* teal for text on light tint */
+    --accent-tint: #d9eeea;                    /* pale teal section bars */
+    --accent-soft: #cfe8e3;                    /* pale teal on-band text */
+    --muted-color: #5f6b72;                    /* slate for aux text */
+    --font-family: "Liberation Sans", Arial, 'Helvetica Neue', 'DejaVu Sans', sans-serif;
+    --font-size: 11px;
+    /* Must match generate-pdf.mjs's PDF_PAGE_MARGIN — the real @page margin is
+       appended later by injectPrintPageCss reading this same variable. The
+       profile overrides this to 0.4in (config/profile.yml style.margin). */
+    --page-margin: 0.6in;
+    /* #3242: unchanged default — see templates/cv-template.html. */
+    --job-break-inside: auto;
+    /* Whether a Projects entry may split across a page break. Unchanged
+       default — a project may still split, keeping the CV compact. Override via
+       config/profile.yml `style.project_break_inside: avoid` for "a project is
+       one unit, never split", which removes the one-word widow a description
+       can leave above its tech line, at the cost of a bottom gap. */
+    --project-break-inside: auto;
+    /* Width of the left date column. "Sep 2013 - Aug 2016" at 9.5px Liberation
+       Sans is ~88px; 96px holds every date the payload spells without wrapping. */
+    --date-column: 96px;
+  }
+  @page { margin: var(--page-margin); }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "clig" 0, "dlig" 0;
+  }
+
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    line-height: 1.4;
+    color: #1b1b1b;
+    background: #ffffff;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "clig" 0, "dlig" 0;
+  }
+
+  .page {
+    max-width: {{PAGE_WIDTH}};
+    margin: 0 auto;
+    background: #ffffff;
+  }
+
+  /* === PHOTO (opt-in, #264) ===
+     Executive guidance is explicitly against headshots on ATS-parsed CVs —
+     leave candidate.photo empty (the default) to omit it entirely. On this
+     theme a photo floats inside the teal band. */
+  .cv-photo {
+    float: right;
+    width: 68px;
+    height: 68px;
+    object-fit: cover;
+    margin: 2px 0 6px 14px;
+  }
+  .cv-photo.rounded { border-radius: 4px; }
+  .cv-photo.circle  { border-radius: 50%; }
+  .cv-photo.square  { border-radius: 0; }
+
+  /* === HEADER BAND ===
+     The dark half of the two-tone: name, title and contact in white on deep
+     teal, tight padding, no border. */
+  .header {
+    background: var(--accent-color);
+    color: #ffffff;
+    padding: 12px 14px 10px;
+    margin: 0 0 9px;
+  }
+
+  .header h1 {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #ffffff;
+    line-height: 1.1;
+  }
+
+  .header-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-soft);
+    margin-top: 3px;
+    line-height: 1.2;
+  }
+
+  .contact-row {
+    margin-top: 4px;
+    font-size: 9.5px;
+    color: var(--accent-soft);
+    line-height: 1.5;
+  }
+
+  .contact-row a { color: var(--accent-soft); text-decoration: none; }
+
+  /* Generated on the item BEFORE it, so a wrap cannot start a line with the
+     separator. See cv-template.html for the full rationale. */
+  .contact-row > *:not(:last-child)::after {
+    /* NO-BREAK space (U+00A0), not a plain one: a plain space here is a break
+       opportunity and Chromium takes it, leaving the bar alone at the start of
+       the next line -- the artifact this rule exists to prevent. */
+    content: "\00a0|";
+    margin-inline: 5px;
+    color: hsl(175 20% 82% / 0.6);
+  }
+
+  /* === SECTIONS ===
+     The light half of the two-tone: section titles are teal uppercase on a
+     pale teal bar. Tight margins keep the page dense. */
+  .section { margin-bottom: 9px; }
+
+  .section-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-ink);
+    background: var(--accent-tint);
+    padding: 2.5px 7px;
+    margin-bottom: 5px;
+  }
+
+  .summary-text {
+    font-size: 11px;
+    line-height: 1.45;
+    color: #23272c;
+  }
+
+  /* === COMPETENCIES ===
+     A plain pipe-separated inline run: one text flow, no pills. */
+  .competencies-grid { line-height: 1.5; }
+
+  .competency-tag {
+    display: inline;
+    font-weight: 600;
+    color: #23272c;
+    white-space: nowrap;
+  }
+  .competency-tag::after {
+    content: "   |   ";
+    font-weight: 400;
+    color: #9fb8b3;
+  }
+  .competency-tag:last-child::after { content: ""; }
+
+  /* === WORK EXPERIENCE ===
+     The signature layout: every role is a CSS grid with the dates in a left
+     column and the company, role, context and bullets to its right. The grid
+     PLACES blocks; the DOM stays one flow (company, dates, role, context,
+     location, bullets), and the builder's markup is untouched — `display:
+     contents` promotes the .job-header spans straight into the grid so no
+     wrapper boxes are reordered. */
+  .job {
+    display: grid;
+    grid-template-columns: var(--date-column) 1fr;
+    column-gap: 10px;
+    margin-bottom: 8px;
+  }
+  .job:last-child { margin-bottom: 0; }
+
+  /* The builder's two-row header becomes its two spans, placed directly. */
+  .job-header { display: contents; }
+
+  .job-company {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--accent-ink);
+    align-self: baseline;
+  }
+
+  .job-period {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--muted-color);
+    white-space: nowrap;
+    align-self: baseline;
+  }
+
+  .job-role {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 11px;
+    font-weight: 700;
+    color: #1b1b1b;
+    margin-top: 1px;
+  }
+
+  .job-context {
+    grid-column: 2;
+    font-style: italic;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--muted-color);
+    margin-top: 1px;
+  }
+
+  .job-location {
+    grid-column: 2;
+    font-size: 9.5px;
+    color: var(--muted-color);
+    text-align: right;
+  }
+
+  .job ul {
+    grid-column: 2;
+    margin-top: 2px;
+    padding-left: 13px;
+  }
+
+  .job li { margin-bottom: 1.5px; }
+
+  /* === PROJECTS ===
+     Same left-column grid: the project's tech line sits in the date slot. */
+  .project {
+    display: grid;
+    grid-template-columns: var(--date-column) 1fr;
+    column-gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .project-title {
+    grid-column: 2;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-ink);
+  }
+
+  .project-badge {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--muted-color);
+    margin-left: 6px;
+  }
+
+  .project-desc { grid-column: 2; margin-top: 1px; }
+
+  .project-tech { grid-column: 1; grid-row: 2; font-size: 9.5px; color: var(--muted-color); margin-top: 1px; }
+
+  /* === EDUCATION ===
+     Same grid: the year in the left column, the degree beside it. */
+  .edu-item {
+    display: grid;
+    grid-template-columns: var(--date-column) 1fr;
+    column-gap: 10px;
+    margin-bottom: 5px;
+  }
+
+  .edu-header { display: contents; }
+
+  .edu-title { grid-column: 2; font-weight: 700; color: #1b1b1b; }
+
+  .edu-org { font-weight: 400; color: #23272c; }
+
+  .edu-year {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--muted-color);
+    white-space: nowrap;
+    align-self: baseline;
+  }
+
+  .edu-location { grid-column: 2; font-size: 9.5px; color: var(--muted-color); }
+
+  .edu-desc { grid-column: 2; margin-top: 1px; color: #33383e; }
+
+  /* === CERTIFICATIONS === */
+  .cert-table,
+  .award-table { display: block; }
+
+  .cert-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .cert-title { font-weight: 700; }
+  .cert-org { flex: 1; color: #33383e; }
+  .cert-year { font-size: 9.5px; font-weight: 600; color: var(--muted-color); white-space: nowrap; }
+
+  /* === SKILLS === */
+  .skills-grid { display: block; }
+
+  .skill-item { margin-bottom: 2px; }
+
+  .skill-category {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 9.5px;
+    color: var(--accent-ink);
+  }
+
+  /* === GDPR / RODO CONSENT (footer) ===
+     Opt-in footer slot filled from payload.consent. Empty by default — the
+     :empty rule hides the div (and its border-top) when no consent text is
+     set, so existing CVs render byte-identical to a pre-consent layout.
+     Mirrors the {{PHOTO}} opt-in slot pattern (#264). */
+  .cv-consent {
+    margin-top: 12px;
+    padding-top: 7px;
+    border-top: 1px solid #ddd;
+    font-size: 8.5px;
+    line-height: 1.4;
+    color: #777;
+    text-align: left;
+  }
+  .cv-consent:empty { display: none; }
+
+  /* === PAGE BREAK CONTROL === */
+  .header,
+  .edu-item,
+  .cert-item,
+  .competency-tag,
+  .skill-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* #3242: opt-in — see the --job-break-inside default above. */
+  .job {
+    page-break-inside: var(--job-break-inside, auto);
+    break-inside: var(--job-break-inside, auto);
+  }
+
+  /* Opt-in — see the --project-break-inside default above. */
+  .project {
+    page-break-inside: var(--project-break-inside, auto);
+    break-inside: var(--project-break-inside, auto);
+  }
+
+  .section-title,
+  .job-company,
+  .job-role,
+  .job-location,
+  .job-context,
+  .edu-location,
+  .project-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Keep a project's tech line attached to the description above it, so a bare
+     "Python | github.com/..." line is never stranded atop the next page. */
+  .project-tech {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+
+  /* === RTL (Arabic) support === */
+  html[lang="ar"] body {
+    direction: rtl;
+    text-align: right;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  }
+  html[lang="ar"] .job ul { padding-right: 13px; padding-left: 0; }
+  html[lang="ar"] .cv-photo { float: left; margin: 2px 14px 6px 0; }
+  html[lang="ar"] .cert-year { text-align: left; }
+  html[lang="ar"] .job-location { text-align: left; }
+
+  /* === CJK fallback === */
+  html[lang="ja"] body {
+    font-family: "Liberation Sans", Arial, 'Hiragino Sans',
+      'Yu Gothic', 'Noto Sans CJK JP', Meiryo, sans-serif;
+  }
+  html[lang="zh-CN"] body,
+  html[lang="zh"] body {
+    font-family: "Liberation Sans", Arial, 'PingFang SC',
+      'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    line-break: strict;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+  html[lang="zh-CN"] .summary-text,
+  html[lang="zh"] .summary-text,
+  html[lang="zh-CN"] .job li,
+  html[lang="zh"] .job li { line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  {{PHOTO}}
+  <!-- HEADER -->
+  <div class="header">
+    <h1>{{NAME}}</h1>
+    {{TITLE_BLOCK}}
+    <div class="contact-row">
+      <a href="tel:{{PHONE}}">{{PHONE}}</a>
+      <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>
+      <a href="{{LINKEDIN_URL}}">{{LINKEDIN_DISPLAY}}</a>
+      <a href="{{PORTFOLIO_URL}}">{{PORTFOLIO_DISPLAY}}</a>
+      <span>{{LOCATION}}</span>
+    </div>
+  </div>
+
+  <!-- PROFESSIONAL SUMMARY -->
+  <div class="section">
+    <div class="section-title">{{SECTION_SUMMARY}}</div>
+    <div class="summary-text">{{SUMMARY_TEXT}}</div>
+  </div>
+
+  <!-- CORE COMPETENCIES -->
+  <div class="section">
+    <div class="section-title">{{SECTION_COMPETENCIES}}</div>
+    <div class="competencies-grid">
+      {{COMPETENCIES}}
+    </div>
+  </div>
+
+  <!-- WORK EXPERIENCE -->
+  <div class="section">
+    <div class="section-title">{{SECTION_EXPERIENCE}}</div>
+    {{EXPERIENCE}}
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="section">
+    <div class="section-title">{{SECTION_PROJECTS}}</div>
+    {{PROJECTS}}
+  </div>
+
+  <!-- EDUCATION -->
+  <div class="section">
+    <div class="section-title">{{SECTION_EDUCATION}}</div>
+    {{EDUCATION}}
+  </div>
+
+  <!-- CERTIFICATIONS -->
+  <div class="section">
+    <div class="section-title">{{SECTION_CERTIFICATIONS}}</div>
+    <div class="cert-table">{{CERTIFICATIONS}}</div>
+  </div>
+
+  <!-- AWARDS -->
+  <div class="section">
+    <div class="section-title">{{SECTION_AWARDS}}</div>
+    <div class="award-table">{{AWARDS}}</div>
+  </div>
+
+  <!-- SKILLS -->
+  <div class="section">
+    <div class="section-title">{{SECTION_SKILLS}}</div>
+    {{SKILLS}}
+  </div>
+
+  <!-- END -->
+
+  <!-- GDPR / RODO consent -->
+  <div class="cv-consent">{{CONSENT}}</div>
+
+</div>
+</body>
+</html>

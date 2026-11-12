@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:atom="http://www.w3.org/2005/Atom"
+>
+    <channel>
+        <title>Symfony Jobs</title>
+        <atom:link href="https://symfony.com/jobs.rss" rel="self" type="application/rss+xml" />
+        <link>https://symfony.com/jobs</link>
+        <description>Latest Symfony job offers</description>
+        <pubDate>Tue, 03 Nov 2026 06:38:16 +0100</pubDate>
+        <lastBuildDate>Tue, 20 Oct 2026 11:08:47 +0200</lastBuildDate>        <language>en</language>
+                <item>
+            <title><![CDATA[Backend Symfony Developer at Hays]]></title>
+            <link>https://symfony.com/jobs/63be2a2</link>
+            <description><![CDATA[
+                <p>
+                    <strong>Salary:</strong> €50,000 – €55,000 / year<br>
+                    <strong>Contract:</strong> Full-time<br>
+                    <strong>Location:</strong> Remote + part-time onsite (Madrid, Spain)
+                </p>
+                <p><a href="https://symfony.com/jobs/63be2a2">Read the full job description</a></p>
+            ]]></description>
+            <guid isPermaLink="false">190</guid>
+            <pubDate>Tue, 20 Oct 2026 11:08:47 +0200</pubDate>
+        </item>
+<item>
+            <title><![CDATA[Symfony Trainer at SensioLabs]]></title>
+            <link>https://symfony.com/jobs/b552236</link>
+            <description><![CDATA[
+                <p>
+                    <strong>Salary:</strong> €50,000 / year<br>
+                    <strong>Contract:</strong> Full-time<br>
+                    <strong>Location:</strong> Remote + part-time onsite (Asnières-sur-Seine, France)
+                </p>
+                <p><a href="https://symfony.com/jobs/b552236">Read the full job description</a></p>
+            ]]></description>
+            <guid isPermaLink="false">174</guid>
+            <pubDate>Tue, 20 Oct 2026 11:08:47 +0200</pubDate>
+        </item>
+</channel>
+</rss>

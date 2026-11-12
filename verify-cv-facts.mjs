@@ -1552,6 +1552,20 @@ export function delegatedAuthorshipClaims(targetText, sourceText) {
 // prevent. A newline ends a clause, so a soft-wrapped letter cannot join two.
 const TIME_NOUNS = new Set(['days', 'weeks', 'months', 'years', 'hours', 'minutes', 'seconds']);
 const HORIZON_LEAD_RE = /\b(?:the|my|our|your)?\s*(?:first|next)\s+$/i;
+// A horizon lead addressed to the READER ("your first six months") names the
+// ROLE's opening window, never anything the candidate asserts about themself:
+// a candidate-facing document cannot dress past experience up as the
+// employer's first months on the job. The stock employer-plan sentence carries
+// no proposal modal of its own — "Your first six months call for trusted
+// partnerships" — so the forward-marker half of the two-signal rule never
+// fires and the window was extracted as the claim "6 months", which no source
+// can evidence because none of it is the candidate's to evidence.
+//
+// The second-person possessive is the whole signal, and it is the only lead
+// that stands alone: "my/our first" is the candidate's own plan and still
+// needs the modal ("my first 12 months were chaos" is a past claim), while
+// "your first" is the role's window by construction.
+const READER_HORIZON_LEAD_RE = /\byour\s+(?:first|next)\s+$/i;
 // `'d` is "had" as often as "would", so it only counts when the verb after it is
 // not a past participle. The -ed test is a heuristic: an irregular participle
 // ("I'd built the first 12 months") still reads as a marker, which is why the
@@ -1783,6 +1797,7 @@ function countMatches(clean, { keepPlanHorizons = false } = {}) {
     if (!TIME_NOUNS.has(match[2].toLowerCase())) return true;
     const lead = clean.slice(Math.max(0, match.index - 40), match.index);
     if (!HORIZON_LEAD_RE.test(lead)) return true;
+    if (READER_HORIZON_LEAD_RE.test(lead)) return false;
     return !FORWARD_MARKER_RE.test(clauseAround(clean, match.index));
   });
 }
@@ -3503,6 +3518,20 @@ function runSelfTest() {
     claimsOf('My first 90 days would centre on the pipeline.'), '');
   equal('a reader-facing plan question is one as well',
     claimsOf('How would you approach the first 90 days?'), '');
+  // The employer-plan horizon: "your first <window>" names the role's opening
+  // period, and the sentence that describes what it calls for carries no
+  // proposal modal — so the forward-marker half of the two-signal rule cannot
+  // recognize it and the window was reported as an invented "6 months".
+  equal('a reader-owned horizon needs no modal',
+    claimsOf('Your first six months call for trusted partnerships, distributed ownership, and a strategic roadmap.'), '');
+  equal('an end-to-end audit stops reporting the reader-owned window',
+    auditClaims('Your first six months call for a strategic roadmap.', 'No numbers here.').invented, []);
+  // The possessive is the only lead that stands alone: the candidate's own
+  // "my first" window still needs the forward marker, past or plan.
+  equal("a first-person horizon without a modal is still a claim",
+    claimsOf('My first six months were spent firefighting.'), '6 months');
+  equal('a reader-owned horizon with a modal is one too',
+    claimsOf('In your first 30 days you would see the roadmap.'), '');
   equal('and a proposal framed with should',
     claimsOf('Glad to talk through how the first 90 days should go.'), '');
   // Ability is not a plan: "could" frames what is possible, not what is proposed.

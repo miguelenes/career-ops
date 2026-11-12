@@ -169,7 +169,7 @@ export default {
         pageUrl.searchParams.set('skip', String(skip));
         let page;
         try {
-          page = await fetchJsonWithRetry(ctx, assertLeverUrl(pageUrl.href), { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS, maxBytes: PAGE_BYTES });
+          page = await fetchJsonWithRetry(ctx, assertLeverUrl(pageUrl.href), { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS, maxBytes: PAGE_BYTES }, probing ? { retries: 0 } : {});
         } catch (err) {
           // A page over the body cap: retry the same offset with a smaller limit.
           if (/** @type {any} */ (err)?.code === 'response_too_large' && pageSize > MIN_PAGE && requests < maxRequests) {
@@ -237,7 +237,7 @@ export default {
       json = await readPaged();
     } else {
       try {
-        json = await ctx.fetchJson(apiUrl, { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS });
+        json = await fetchJsonWithRetry(ctx, apiUrl, { redirect: 'error', timeoutMs: LEVER_TIMEOUT_MS });
       } catch (err) {
         if (/** @type {any} */ (err)?.code !== 'response_too_large') throw err;
         json = await readPaged();

@@ -26,6 +26,7 @@
  *   node rank-pipeline.mjs --cli codex         # override CLI auto-detection
  *   node rank-pipeline.mjs --model <name>      # passed through when the CLI takes one
  *   node rank-pipeline.mjs --dry-run           # print what would be written
+ *   node rank-pipeline.mjs --order             # print ranked pending rows in preparation order (read-only)
  *   node rank-pipeline.mjs --self-test         # in-memory suite; spawns no subprocess
  */
 
@@ -35,7 +36,7 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { flagValue, hasFlag, safeIntFlag, validateFlags } from './lib/cli-flags.mjs';
-import { sanitizeMarkdownField } from './scan.mjs';
+import { sanitizeMarkdownField, loadBlacklist, findBlacklistEntry, isLinkedInJobUrl } from './scan.mjs';
 import { withPipelineLock } from './pipeline-lock.mjs';
 import { replaceUserFile } from './tracker-utils.mjs';
 import { scorePosting } from './lib/inbox-rank.mjs';
@@ -101,6 +102,8 @@ export const CLI_CANDIDATES = [
   },
   { bin: 'qwen', args: p => ['-p', p] },
   { bin: 'agy', id: 'antigravity', args: p => ['-p', p] },
+  // Local: codex exec (read-only) through the Job Finder account-rotating runner; pick with CAREER_OPS_CLI=codex-rr.
+  { bin: '/workspace/career/approval/codex_runner.py', id: 'codex-rr', args: p => [p] },
   { bin: 'grok', args: p => ['-p', p, '--disable-web-search', '--disallowed-tools', GROK_DENIED_TOOLS] },
   { bin: 'pi', args: p => ['--no-tools', '-p', p] },
   { bin: 'omp', args: p => ['--no-tools', '-p', p] },
@@ -115,6 +118,7 @@ const USAGE = `
     --cli <name>  force a CLI instead of $CAREER_OPS_CLI or auto-detection
     --model <n>   passed through to the CLI when it accepts one
     --dry-run     print the annotations, write nothing
+    --order       print ranked pending rows in preparation order; writes nothing
     --self-test   run the in-memory suite (no subprocess, no network)
 
     CAREER_OPS_RANK_TIMEOUT_MS  per-call timeout (default ${DEFAULT_TIMEOUT_MS})
@@ -124,6 +128,7 @@ const KNOWN_FLAGS = [
   '--cli',
   '--model',
   '--dry-run',
+  '--order',
   '--self-test',
   '--help',
   '-h',
@@ -251,6 +256,40 @@ export function applyAnnotations(text, pending, originalText = text) {
     })
     .join('\n');
   return { text: out, written };
+}
+
+/**
+ * Ranked pending rows in the order to prepare them: score (high first), then
+ * `easy_apply: yes`, then the newest LinkedIn `posted:` date, then file order.
+ * Easy Apply only breaks a tie between equal scores; it never adds to a score,
+ * so a 3.9 never moves above a 4.0. The file itself is never reordered.
+ * Excluded: unranked rows, data/blacklist.md matches, rows that name a dealbreaker.
+ */
+export function orderForPreparation(text, blacklist = new Map()) {
+  return String(text ?? '').split('\n')
+    .map((raw, index) => ({ raw, index }))
+    .filter(({ raw }) => raw.startsWith('- [ ] ') && raw.includes(RANK_LABEL))
+    .map(({ raw, index }) => {
+      const cells = raw.slice(6).split('|').map(c => c.trim());
+      const label = name => cells.find(c => c.startsWith(`${name}: `))?.slice(name.length + 2) ?? '';
+      const posted = label('posted');
+      return {
+        index,
+        raw,
+        url: cells[0] ?? '',
+        company: cells[1] ?? '',
+        score: Number.parseFloat(label('rank')),
+        easyApply: label('easy_apply') === 'yes',
+        linkedInPosted: isLinkedInJobUrl(cells[0]) && /^\d{4}-\d{2}-\d{2}$/.test(posted) ? posted : '',
+      };
+    })
+    .filter(e => Number.isFinite(e.score))
+    .filter(e => !findBlacklistEntry(blacklist, e.company, e.url))
+    .filter(e => !/\bdeal-?breakers?\b/i.test(e.raw))
+    .sort((a, b) => (b.score - a.score)
+      || (Number(b.easyApply) - Number(a.easyApply))
+      || b.linkedInPosted.localeCompare(a.linkedInPosted)
+      || (a.index - b.index));
 }
 
 /** Respects --limit and the ceiling the flag cannot raise. Deterministic: file order. */
@@ -388,6 +427,13 @@ async function main(args) {
     return 0;
   }
 
+  if (hasFlag(args, '--order')) {
+    if (!existsSync(PIPELINE_PATH)) return 0;
+    const ordered = orderForPreparation(readFileSync(PIPELINE_PATH, 'utf-8'), loadBlacklist());
+    for (const entry of ordered) console.log(entry.raw);
+    return 0;
+  }
+
   const dryRun = hasFlag(args, '--dry-run');
   const rawLimit = flagValue(args, '--limit');
   const limit = safeIntFlag(rawLimit, hasFlag(args, '--limit') ? 0 : DEFAULT_LIMIT);
@@ -411,7 +457,7 @@ async function main(args) {
   const remembered = readRememberedCli(DATA_ROOT);
   const active = CLI_CANDIDATES.find(c => c.bin === remembered || c.id === remembered);
   const cli = forced
-    ? CLI_CANDIDATES.find(c => c.bin === forced) ?? { bin: forced, args: p => ['-p', p] }
+    ? CLI_CANDIDATES.find(c => c.bin === forced || c.id === forced) ?? { bin: forced, args: p => ['-p', p] }
     : detectCli(active ? [active, ...CLI_CANDIDATES] : CLI_CANDIDATES);
   if (!cli) {
     console.error('No supported agent CLI found (tried: %s).', CLI_CANDIDATES.map(c => c.bin).join(', '));

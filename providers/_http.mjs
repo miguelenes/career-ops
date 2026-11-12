@@ -737,6 +737,10 @@ export function isRefusedRedirectError(err) {
  */
 export function isRetryableError(err) {
   const status = err?.status;
+  // Board retries cannot repair a missing host or an unavailable resolver.
+  // Surface these promptly to the full sweep's resolver circuit breaker.
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(err?.code)
+    || ['ENOTFOUND', 'EAI_AGAIN'].includes(err?.cause?.code)) return false;
   if (status === 429) return true;
   if (typeof status === 'number' && status >= 500) return true;
   if (isRefusedRedirectError(err)) return false;

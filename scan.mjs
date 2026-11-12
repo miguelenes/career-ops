@@ -87,6 +87,8 @@ import { canonicalJobKey, normalizeUrl, LANGUAGE_PARAMS, languageSubtag, promote
 import { getCareerOpsRoot, getProfilePath, hasProfileOverride } from './path-resolver.mjs';
 import { checkLivenessViaApi } from './liveness-api.mjs';
 import { robotsAllows } from './robots-check.mjs';
+import { checkAggregatorOriginal } from './aggregator-liveness.mjs';
+import { linkedInJobId } from './lib/linkedin-url.mjs';
 import { resolveExperienceFilter, applyExperienceFilter } from './jd-years.mjs';
 
 const CODE_ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -2220,7 +2222,7 @@ const PIPELINE_CHECKBOX_STRICT_RE = /^- \[[ x]\]\s+/;
  * segment invents a city for a role and lets it resurface, while a genuine
  * location beginning `Posted: ` / `Rank: ` does not occur.
  */
-const PIPELINE_LABELED_SEGMENT_RE = /^(?:posted|trust|yrs|note|rank):\s/iu;
+const PIPELINE_LABELED_SEGMENT_RE = /^(?:posted|trust|easy_apply|yrs|note|rank):\s/iu;
 
 /**
  * The `~~…~~` wrapper an expired entry is written with.
@@ -3486,6 +3488,11 @@ export function formatPipelineOffer(offer) {
   // posted:, before note:, for a stable serialization.
   const trust = formatTrustSegment(offer);
   if (trust) line = `${line} | ${trust}`;
+  // LinkedIn Easy Apply tag (see tagEasyApply). Only on LinkedIn job URLs and
+  // only with one of the two values, so every other row is byte-identical.
+  if (EASY_APPLY_VALUES.includes(offer.easy_apply) && isLinkedInJobUrl(offer.url)) {
+    line = `${line} | easy_apply: ${offer.easy_apply}`;
+  }
   // Labeled years-of-experience segment (experience_filter): the JD's stated
   // requirement ("5+", "3-5", "none stated", "unread"). Absent when the filter
   // is off, so such a row stays byte-identical. After trust:, before note:.
@@ -3498,6 +3505,54 @@ export function formatPipelineOffer(offer) {
   // source-specific, and an offer without `note` produces byte-identical output.
   const note = typeof offer.note === 'string' ? sanitizeMarkdownField(offer.note) : '';
   return note ? `${line} | note: ${note}` : line;
+}
+
+// ── LinkedIn source priority (portals.yml source_priority, profile scan.*) ──
+// The Easy Apply tag only decides which postings are prepared first
+// (rank-pipeline.mjs --order). Nothing here applies or submits anything.
+const EASY_APPLY_VALUES = ['yes', 'unknown'];
+
+/**
+ * Tagging is on when portals.yml `source_priority.linkedin.easy_apply` or
+ * profile.yml `scan.linkedin_easy_apply` is set, and off when either says
+ * `prefer: false`.
+ */
+export function easyApplyPolicy(portalsConfig = {}, profile = {}) {
+  const blocks = [portalsConfig?.source_priority?.linkedin?.easy_apply, profile?.scan?.linkedin_easy_apply]
+    .filter(b => b && typeof b === 'object');
+  return { enabled: blocks.length > 0 && blocks.every(b => b.prefer !== false) };
+}
+
+export function isLinkedInJobUrl(url) {
+  try { return linkedInJobId(new URL(url)) !== null; } catch { return false; }
+}
+
+/** 'yes' when the "Easy Apply" label appears in the page/card/snippet text, else 'unknown'. Never guesses 'no'. */
+export function detectEasyApply(text) {
+  return /\beasy apply\b/i.test(String(text ?? '')) ? 'yes' : 'unknown';
+}
+
+/** Copy of `offer` carrying `easy_apply` when the policy is on and it is a LinkedIn job URL. */
+export function tagEasyApply(offer, pageText, policy) {
+  if (!policy?.enabled || !isLinkedInJobUrl(offer?.url)) return offer;
+  return { ...offer, easy_apply: detectEasyApply(pageText) };
+}
+
+/**
+ * Enabled search_queries in run order: `priority` ascending (missing = last),
+ * then the `source_priority.order` position of `source`, then file order.
+ */
+export function orderSearchQueries(queries, sourceOrder = []) {
+  const rank = q => (Number.isFinite(q.priority) ? q.priority : Infinity);
+  const sourceRank = q => {
+    const i = Array.isArray(sourceOrder) ? sourceOrder.indexOf(q.source) : -1;
+    return i === -1 ? Infinity : i;
+  };
+  return (Array.isArray(queries) ? queries : [])
+    .filter(q => q && typeof q === 'object' && q.enabled !== false && typeof q.query === 'string')
+    .map((q, i) => ({ q, i }))
+    .sort((a, b) => (rank(a.q) - rank(b.q)) || (sourceRank(a.q) - sourceRank(b.q)) || (a.i - b.i))
+    .map(({ q }) => q);
 }
 
 // postedAt arrives as epoch ms (or absent). Convert to 'YYYY-MM-DD', or '' when missing.
@@ -4612,13 +4667,15 @@ const KNOWN_FLAGS = [
   '--dry-run', '--verify', '--headed-fallback', '--throttle', '--rediscover-404',
   '--include-blacklisted', '--company', '--posted-after', '--posted-before',
   '--since', '--quiet', '--json', '--help', '-h',
+  '--list-queries', '--add-linkedin', '--title', '--location', '--posted', '--page',
 ];
 
 // Flags whose space-separated value is the NEXT argv token (the `--flag=value`
 // form is self-contained and never needs this). --throttle is deliberately
 // excluded: only its bare and `--throttle=<ms>` forms are read below, so a
 // following token is never its value.
-const VALUE_FLAGS = ['--company', '--posted-after', '--posted-before', '--since'];
+const VALUE_FLAGS = ['--company', '--posted-after', '--posted-before', '--since',
+  '--add-linkedin', '--title', '--location', '--posted', '--page'];
 
 const USAGE = `Usage:
   node scan.mjs                              # scan all enabled companies
@@ -4635,10 +4692,74 @@ const USAGE = `Usage:
   node scan.mjs --posted-before 2026-08-01   # absolute upper bound on posting date
   node scan.mjs --json                       # emit one machine-readable receipt on stdout
   node scan.mjs --quiet                      # suppress the manifesto footer
+  node scan.mjs --list-queries               # enabled search_queries in run (priority) order; offline
+  node scan.mjs --add-linkedin <url> --company C --title T [--location L] [--posted YYYY-MM-DD] [--page FILE] [--dry-run]
+                                             # add one LinkedIn hit; tags easy_apply: yes/unknown from FILE text
   node scan.mjs --help                       # print this usage block and exit
 
 Exit status: 0 when the scan ran, 1 on a configuration or fatal error, 2 when
 every target it tried failed (with --json: when any target failed).`;
+
+function readYamlFile(filePath) {
+  if (!existsSync(filePath)) return {};
+  const raw = parseYaml(readFileSync(filePath, 'utf-8'));
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+// Offline source-priority commands: no provider loads, no network. The agent
+// runs Level 3 WebSearch in --list-queries order and adds each LinkedIn hit
+// through --add-linkedin, which goes through the shared admission gate
+// (seen, data/blacklist.md, title and location filters). Adding a row never
+// applies anywhere.
+async function runLinkedInPriorityCommand(args, { dryRun, requireValue, isValidIsoDate }) {
+  let config;
+  try { config = readYamlFile(PORTALS_PATH); } catch (err) {
+    console.error(`Error: failed to parse ${PORTALS_PATH}: ${err.message}`);
+    process.exit(1);
+  }
+  if (hasFlag(args, '--list-queries')) {
+    for (const q of orderSearchQueries(config.search_queries, config.source_priority?.order)) {
+      console.log([q.priority ?? '-', q.source ?? '-', sanitizeTsvField(q.name ?? ''), sanitizeTsvField(q.query)].join('\t'));
+    }
+    return;
+  }
+
+  const url = requireValue('--add-linkedin');
+  const company = requireValue('--company');
+  const title = requireValue('--title');
+  const posted = requireValue('--posted');
+  const pagePath = requireValue('--page');
+  if (!isLinkedInJobUrl(url) || !company || !title) {
+    console.error('Error: --add-linkedin needs a LinkedIn job URL (/jobs/view/<id>), --company and --title');
+    process.exit(1);
+  }
+  if (posted != null && !isValidIsoDate(posted)) {
+    console.error(`Error: --posted expects YYYY-MM-DD, got "${posted}"`);
+    process.exit(1);
+  }
+  let profile = {};
+  try { profile = readYamlFile(PROFILE_PATH); } catch { /* unreadable profile: portals.yml alone decides */ }
+  const offer = tagEasyApply({
+    url,
+    company,
+    title,
+    location: requireValue('--location') ?? '',
+    source: 'linkedin',
+    ...(posted ? { postedAt: Date.parse(`${posted}T00:00:00Z`) } : {}),
+  }, pagePath ? readFileSync(pagePath, 'utf-8') : '', easyApplyPolicy(config, profile));
+
+  const { createAdmissionGate, formatSkipCounts } = await import('./lib/admission-gate.mjs');
+  const gate = createAdmissionGate({ config });
+  const { admitted } = gate.partition([offer]);
+  if (admitted.length === 0) {
+    console.log(`Not added: ${formatSkipCounts(gate.counts)}`);
+    return;
+  }
+  console.log(formatPipelineOffer(offer));
+  if (dryRun) return;
+  await appendToPipeline(admitted);
+  await appendToScanHistory(admitted, localToday());
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -4707,6 +4828,11 @@ async function main() {
     process.exit(1);
   }
 
+  if (hasFlag(args, '--list-queries') || hasFlag(args, '--add-linkedin')) {
+    await runLinkedInPriorityCommand(args, { dryRun, requireValue, isValidIsoDate });
+    return;
+  }
+
   // --since <days>: a RELATIVE lower bound on the employer's posting date —
   // the same thing --posted-after expresses absolutely, and it filters exactly
   // like it does. Matches scan-ats-full.mjs, which has always treated --since
@@ -4767,7 +4893,9 @@ async function main() {
   }
   const companies = Array.isArray(config.tracked_companies) ? config.tracked_companies : [];
   const boards = Array.isArray(config.job_boards) ? config.job_boards : [];
-  const titleFilter = buildTitleFilter(config.title_filter);
+  // Per-source title_filter_overrides: `companies` lists portals.yml entry
+  // names. With no overrides this is the plain buildTitleFilter() result.
+  const titleFilter = buildTitleFilterWithOverrides(config.title_filter, buildTitleFilterOverrides(config.title_filter_overrides));
 
   // Seniority tier classifier integration
   let classifyTier = null;
@@ -4792,7 +4920,7 @@ async function main() {
   // negative vetoed) still reach the content check, and pass it only on their
   // description. See the title gate in the scan loop.
   const rescueTitleMisses = contentFilter.rescueTitleMisses === true;
-  const titleGate = buildTitleGate(config.title_filter, contentFilter, titleFilter);
+
   const candidateCountry = loadCandidateCountry();
   const countryEligibilityFilter = buildCountryEligibilityFilter(config.country_eligibility_filter, candidateCountry);
   const visaFilter = buildVisaFilter(config.visa_filter);
@@ -5108,6 +5236,7 @@ async function main() {
   const transientFailures = [];
   const retriedTargets = new Set();
   const tasks = targets.map(company => async () => {
+    const titleGate = buildTitleGate(config.title_filter, contentFilter, title => titleFilter(title, company.name));
     let provider = company._provider;
     const observation = { requests: 0, successfulResponses: 0, lastStatus: null };
     // includeUndated is deliberately ALWAYS true, independent of the window.
@@ -5358,7 +5487,7 @@ async function main() {
         // Compare requisitions only in overlapping locations: the exact key,
         // truly locationless wildcard rows, and (for a locationless candidate)
         // the prebuilt aggregate of located rows. An unknown ID keeps the
-        // historical duplicate decision. Aggregators use URL dedup only.
+        // historical duplicate decision. Named employers also match across feeds.
         const baseKey = companyRoleDedupKey(job.company, job.title, canonicalizeCompany);
         // No employer, no company+role identity. A board that cannot name a
         // posting's employer returns `company: ''` (providers/_types.js allows
@@ -5366,9 +5495,10 @@ async function main() {
         // then stood for every unnamed employer at once: a second "Senior
         // Software Engineer" from a different company was dropped as a
         // duplicate of the first. Seeding already skips such rows
-        // (collectSeenCompanyRoles), so they dedup by URL only, as an
-        // aggregator's do.
-        const key = company.aggregator === true || !canonicalizeCompany(job.company)
+        // (collectSeenCompanyRoles), so they dedup by URL only, as a
+        // feed that only names itself does.
+        const key = !canonicalizeCompany(job.company)
+          || (company.aggregator === true && canonicalizeCompany(job.company) === canonicalizeCompany(company.name))
           ? null
           : (dedupIncludeLocation
             ? companyRoleDedupKey(job.company, job.title, canonicalizeCompany, job.location)
@@ -5380,6 +5510,24 @@ async function main() {
         requisition, dedupIncludeLanguage ? language : [])) {
           totalDupes++;
           continue;
+        }
+        // A feed's timestamp is not evidence that the employer is still hiring.
+        // Check only after cheap filters/dedup, and do not pin uncertain results.
+        if (provider.id === 'himalayas' || job.originalUrl) {
+          const verdict = await checkAggregatorOriginal(job, { ctx });
+          if (verdict.result !== 'active') {
+            console.log(`  Deferred aggregator posting (${verdict.result}): ${job.company} — ${job.title}`);
+            continue;
+          }
+          // Other boards can publish this identity while the request awaits.
+          if (!newLanguageVersion && (isOfferSeen(job, seenUrls, dedupSnapshot.identityPromotableUrls)
+            || matchesSeenCompanyRole({ key, baseKey, seen: seenCompanyRoles,
+              requisitions: seenCompanyRoleRequisitions, locatedRequisitions: locatedRequisitionsByBase,
+              languages: seenCompanyRoleLanguages, locatedLanguages: locatedLanguagesByBase },
+            requisition, dedupIncludeLanguage ? language : []))) {
+            totalDupes++;
+            continue;
+          }
         }
         const cooldownResult = cooldownFilter(job);
         if (cooldownResult.skip) {

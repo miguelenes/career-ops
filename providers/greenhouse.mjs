@@ -37,6 +37,7 @@ function parseDetailConfig(entry) {
     detailLimit: intInRange(cfg.detailLimit, 25, 1, 100),
   };
 }
+export const GREENHOUSE_TIMEOUT_MS = 30_000;
 
 const LEGACY_BOARD_HOSTS = new Set(['boards.greenhouse.io', 'boards.eu.greenhouse.io']);
 const JOB_BOARD_HOSTS = new Set(['job-boards.greenhouse.io', 'job-boards.eu.greenhouse.io']);
@@ -223,7 +224,7 @@ export default {
     // expensive request.
     const listUrl = new URL(apiUrl);
     listUrl.searchParams.delete('content');
-    const json = /** @type {any} */ (await ctx.fetchJson(assertGreenhouseUrl(listUrl.href), { redirect: 'error' }));
+    const json = /** @type {any} */ (await fetchJsonWithRetry(ctx, assertGreenhouseUrl(listUrl.href), { redirect: 'error', timeoutMs: GREENHOUSE_TIMEOUT_MS }, ctx.maxPages ? { retries: 0 } : {}));
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
     return jobs
       .filter(/** @param {any} j */ j => j.absolute_url)
@@ -248,7 +249,7 @@ export default {
     let json;
     let bodiesInline = true;
     try {
-      json = await ctx.fetchJson(listHref, { redirect: 'error' });
+      json = await fetchJsonWithRetry(ctx, listHref, { redirect: 'error', timeoutMs: GREENHOUSE_TIMEOUT_MS }, ctx.maxPages ? { retries: 0 } : {});
     } catch (err) {
       // A board with thousands of postings (SpaceX, Anduril) exceeds the body cap
       // once every posting body is embedded. Fall back to titles, URLs and dates:

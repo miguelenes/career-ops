@@ -117,8 +117,8 @@ const VENDORS = {
   breezy:          { id: 'breezy',          provider: breezy,          hostFor: (s) => `${lower(s)}.breezy.hr`,      buildUrl: B.breezy },
   bamboohr:        { id: 'bamboohr',        provider: bamboohr,        hostFor: (s) => `${lower(s)}.bamboohr.com`,   buildUrl: B.bamboohr },
   pinpoint:        { id: 'pinpoint',        provider: pinpoint,        hostFor: (s) => `${lower(s)}.pinpointhq.com`, buildUrl: B.pinpoint },
-  teamtailor:      { id: 'teamtailor', provider: teamtailor, hostFor: (s) => `${lower(s)}.teamtailor.com`, buildUrl: (s) => `https://${lower(s)}.teamtailor.com` },
-  personio:        { id: 'personio', provider: personio, hostFor: (s) => `${lower(s)}.jobs.personio.de`, buildUrl: (s) => `https://${lower(s)}.jobs.personio.de` },
+  teamtailor:      { id: 'teamtailor', provider: teamtailor, hostFor: (s) => `${lower(s)}.teamtailor.com`, buildUrl: B.teamtailor },
+  personio:        { id: 'personio', provider: personio, hostFor: (s) => `${lower(s)}.jobs.personio.de`, buildUrl: B.personio },
 };
 // Slug-resolvable vendors, probed in order for each company (first match wins).
 // Probe order is also a cost decision. resolveCompany probes candidates in this

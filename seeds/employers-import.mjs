@@ -74,6 +74,8 @@ const SUBDOMAIN_HOSTS = Object.freeze({
   'breezy.hr': 'breezy',
   'bamboohr.com': 'bamboohr',
   'pinpointhq.com': 'pinpoint',
+  'teamtailor.com': 'teamtailor',
+  'jobs.personio.de': 'personio',
 });
 // The vendor's own subdomains: never a company board.
 const VENDOR_SUBDOMAINS = new Set(['www', 'app', 'api', 'help', 'support', 'status', 'blog', 'docs', 'careers', 'jobs', 'developers', 'marketplace']);

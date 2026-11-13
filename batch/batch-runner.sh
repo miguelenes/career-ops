@@ -504,6 +504,13 @@ acquire_state_lock() {
     fi
 
     if [[ ! -d "$STATE_LOCK_DIR" ]]; then
+      # A holder may have released the directory after mkdir failed. Retry
+      # within the same timeout, while still failing closed on obstructions.
+      if [[ ! -e "$STATE_LOCK_DIR" && ! -L "$STATE_LOCK_DIR" ]] && (( waited < max_waits )); then
+        sleep 0.1
+        ((waited += 1))
+        continue
+      fi
       if (( PARALLEL <= 1 )); then
         echo "WARN: State lock creation failed. Falling back to lock-free operation (single-worker mode)." >&2
         STATE_LOCK_DISABLED=1

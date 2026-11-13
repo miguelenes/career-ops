@@ -53,6 +53,22 @@ fi
 [[ "\${STATE_LOCK_OWNED:-0}" == 0 ]]
 `));
 
+test('batch state lock retries when the holder releases after mkdir fails', () => run(`
+mkdir "$STATE_LOCK_DIR"
+mkdir() {
+  if [[ ! -f "$fixture/released" ]]; then
+    command rmdir "$STATE_LOCK_DIR"
+    touch "$fixture/released"
+    return 1
+  fi
+  command mkdir "$@"
+}
+acquire_state_lock
+[[ -f "$fixture/released" && -f "$STATE_LOCK_OWNED_FILE" ]]
+release_state_lock
+[[ ! -d "$STATE_LOCK_DIR" ]]
+`));
+
 test('a stale batch-lock reader cannot remove a live successor owner', () => run(`
 mkdir "$STATE_LOCK_DIR"
 printf '99999999\\t0\\n' > "$STATE_LOCK_PID_FILE"

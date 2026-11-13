@@ -40,9 +40,8 @@ WORKDIR /app
 
 # Prime npm deps in a layer so rebuilds stay fast.
 # Pin playwright to the version that matches the base image's bundled chromium.
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --no-fund \
- && npm install --no-audit --no-fund --save-exact playwright@1.64.1
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
 
 # The rest of the project is bind-mounted at runtime via docker compose,
 # so we don't COPY sources here — keeps the image generic and lets local

@@ -230,9 +230,11 @@ claude   # or codex / qwen / opencode / agy / grok — open your AI CLI here
 <details>
 <summary><b>Prefer to set it up manually? (git clone)</b></summary>
 
+The root lockfile is generated with Node 22.13.0 and npm 10.9.2. Use `npm ci` for a reproducible install.
+
 ```bash
 git clone https://github.com/career-ops-hq/career-ops.git
-cd career-ops && npm install
+cd career-ops && npm ci
 npx playwright install chromium   # only needed for PDF generation
 # On a non-Debian/Ubuntu Linux distro (Fedora, Arch, ...), Chromium's system
 # libraries aren't installed by the line above — install them yourself with

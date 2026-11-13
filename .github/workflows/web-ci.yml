@@ -37,12 +37,12 @@ jobs:
           cache-dependency-path: web/package-lock.json
       # The doctor parity test runs the real core doctor.mjs, which imports the
       # core's own dependencies (js-yaml, dotenv). Installed the same way as
-      # test.yml: no lockfile at the root, and no browser download.
+      # test.yml: use the root lockfile and skip the browser download.
       - name: Install core dependencies
-        run: npm install --ignore-scripts
+        run: npm ci --ignore-scripts
         working-directory: .
       - run: npm ci
-      # The web tree carries the only tracked lockfile, so this audits the
+      # The web tree has its own lockfile, so this audits the
       # exact pinned versions (#5771's class of finding). This workflow is
       # informative by design: a red here blocks nothing, it is one more
       # place an advisory gets seen before it ships.

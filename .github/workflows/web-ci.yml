@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# One run per ref: a new push cancels the run in progress. Tag runs are never cancelled.
+concurrency:
+  group: web-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   web:
     name: web typecheck + build
@@ -34,7 +39,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
       # The doctor parity test runs the real core doctor.mjs, which imports the
       # core's own dependencies (js-yaml, dotenv). Installed the same way as
       # test.yml: use the root lockfile and skip the browser download.
@@ -42,6 +49,23 @@ jobs:
         run: npm ci --ignore-scripts
         working-directory: .
       - run: npm ci
+      # Restore incremental build caches for tsc and next
+      - name: Restore tsc incremental build info
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: web/tsconfig.tsbuildinfo
+          key: tsc-${{ runner.os }}-${{ hashFiles('web/package-lock.json', 'web/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsc-${{ runner.os }}-${{ hashFiles('web/package-lock.json', 'web/tsconfig*.json') }}-
+            tsc-${{ runner.os }}-
+      - name: Restore Next.js build cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            next-${{ runner.os }}-
       # The web tree has its own lockfile, so this audits the
       # exact pinned versions (#5771's class of finding). This workflow is
       # informative by design: a red here blocks nothing, it is one more

@@ -150,6 +150,8 @@ function writeJobPortals(root, job) {
   if (!base || typeof base !== "object") throw new Error("portals.yml must contain a mapping");
 
   const filters = job.filters || {};
+  const listOrFallback = (list, fallback) =>
+    Array.isArray(list) && list.length ? list : (Array.isArray(fallback) ? fallback : []);
   const positive = Array.isArray(filters.positive)
     ? filters.positive.filter((value) => typeof value === "string" && value.trim())
     : [];
@@ -162,15 +164,15 @@ function writeJobPortals(root, job) {
   base.title_filter = {
     ...(base.title_filter || {}),
     positive: positive.length ? positive : fallbackPositive,
-    negative: Array.isArray(filters.negative) ? filters.negative : [],
+    negative: listOrFallback(filters.negative, base.title_filter?.negative),
   };
   if (base.title_filter_full) base.title_filter_full = { ...base.title_filter_full, ...base.title_filter };
   base.location_filter = {
     ...(base.location_filter || {}),
-    allow: Array.isArray(filters.allow) ? filters.allow : [],
-    block: Array.isArray(filters.block) ? filters.block : [],
-    block_hard: Array.isArray(filters.blockHard) ? filters.blockHard : [],
-    always_allow: Array.isArray(filters.alwaysAllow) ? filters.alwaysAllow : [],
+    allow: listOrFallback(filters.allow, base.location_filter?.allow),
+    block: listOrFallback(filters.block, base.location_filter?.block),
+    block_hard: listOrFallback(filters.blockHard, base.location_filter?.block_hard),
+    always_allow: listOrFallback(filters.alwaysAllow, base.location_filter?.always_allow),
   };
 
   const tempDir = path.join(root, "data", "tmp");

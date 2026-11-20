@@ -152,6 +152,31 @@ test("scheduled overlay falls back to portal title keywords and preserves hard l
   }
 });
 
+test("scheduled overlay falls back for empty or missing filters and honors explicit lists", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "career-ops-scheduled-fallback-"));
+  fs.writeFileSync(path.join(temp, "portals.yml"), "title_filter:\n  positive: [engineer]\n  negative: [base-negative]\ntitle_filter_full: {}\nlocation_filter:\n  allow: [base-allow]\n  block: [base-block]\n  block_hard: [base-hard]\n  always_allow: [base-always]\n", "utf8");
+  const job = { id: "11111111-1111-4111-8111-111111111111", engine: "full" };
+  const keys = { negative: "negative", allow: "allow", block: "block", blockHard: "block_hard", alwaysAllow: "always_allow" };
+  try {
+    for (const filters of [Object.fromEntries(Object.keys(keys).map((key) => [key, []])), {}, Object.fromEntries(Object.keys(keys).map((key) => [key, [`job-${key}`]]))]) {
+      let overlay;
+      const result = executeJob(temp, { ...job, filters }, { spawnFn: (_node, _args, options) => {
+        overlay = yaml.load(fs.readFileSync(options.env.CAREER_OPS_PORTALS, "utf8"));
+        return { status: 0, stdout: JSON.stringify({ postingsKept: 0 }), stderr: "" };
+      } });
+      assert.equal(result.state, "success");
+      const defaults = { negative: "base-negative", allow: "base-allow", block: "base-block", blockHard: "base-hard", alwaysAllow: "base-always" };
+      for (const [key, yamlKey] of Object.entries(keys)) {
+        const expected = filters[key]?.length ? filters[key] : [defaults[key]];
+        assert.deepEqual(key === "negative" ? overlay.title_filter[yamlKey] : overlay.location_filter[yamlKey], expected);
+        if (key === "negative") assert.deepEqual(overlay.title_filter_full.negative, expected);
+      }
+    }
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test("scheduled scan hands core the profile path the web resolves, not the raw relative value", () => {
   // The scanner runs with cwd = the checkout, but the web resolves a relative
   // CAREER_OPS_PROFILE under the data root it passes, so forwarding the raw value

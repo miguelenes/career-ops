@@ -276,3 +276,30 @@ const { loadCheckpoint, checkpointCompatible } = mod;
     }
   }
 }
+
+// Scheduled slices persist independently for each ATS and wrap only after the
+// final short slice, so the first cycle covers every fixture board once.
+{
+  const { mkdtempSync, rmSync, writeFileSync, mkdirSync } = await import('fs');
+  const { tmpdir } = await import('os');
+  const dir = mkdtempSync(join(tmpdir(), 'co-rotation-'));
+  const file = join(dir, 'cursor.json');
+  const boards = Array.from({ length: 11 }, (_, i) => `board-${i}`);
+  try {
+    const slices = Array.from({ length: 3 }, () => {
+      const { start, end } = mod.reserveRotation(boards, 4, 'greenhouse', file);
+      return boards.slice(start, end);
+    });
+    if (new Set(slices.flat()).size === boards.length && slices.flat().length === boards.length) pass('rotation covers all boards once in ceil(count / limit) runs');
+    else fail('rotation missed or repeated a board');
+    if (slices[0].every((board) => !slices[1].includes(board))) pass('consecutive capped slices are disjoint');
+    else fail('consecutive slices overlap');
+    if (mod.reserveRotation(boards, 4, 'lever', file).start === 0 && mod.reserveRotation(boards, 4, 'greenhouse', file).start === 0) pass('cursors are per ATS and wrap');
+    else fail('per-ATS cursor or wrap failed');
+    mkdirSync(`${file}.lock`);
+    try { mod.reserveRotation(boards, 4, 'lever', file); fail('concurrent reservation accepted'); } catch { pass('concurrent reservation fails closed'); }
+    rmSync(`${file}.lock`, { recursive: true });
+    writeFileSync(file, '{bad');
+    try { mod.reserveRotation(boards, 4, 'lever', file); fail('malformed cursor accepted'); } catch { pass('malformed cursor fails closed'); }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}

@@ -45,6 +45,7 @@
  *   node scan-ats-full.mjs --ats greenhouse,workday  # subset of sources
  *   node scan-ats-full.mjs --history-seeds --ats successfactors # scan history-derived boards
  *   node scan-ats-full.mjs --limit 200          # max companies per ATS (default: all)
+ *   node scan-ats-full.mjs --limit 200 --rotate # persist successive slices per ATS
  *   node scan-ats-full.mjs --dry-run            # preview without writing files
  *   node scan-ats-full.mjs --liveness           # Playwright-verify matches before writing
  *   node scan-ats-full.mjs --include-blacklisted # audit: let data/blacklist.md matches through, annotated
@@ -55,7 +56,7 @@
  */
 
 import { captureWorkplaceEvidence } from './providers/_country.mjs';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, unlinkSync, createReadStream, createWriteStream } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmdirSync, statSync, unlinkSync, createReadStream, createWriteStream } from 'fs';
 import { finished } from 'node:stream/promises';
 import { createGunzip, createGzip } from 'node:zlib';
 import { createHash } from 'crypto';
@@ -186,6 +187,7 @@ function validCheckpointCurrent(cur) {
 export function checkpointCompatible(cp, opts) {
   return Boolean(cp)
     && !opts.shuffle
+    && Boolean(cp.rotate) === Boolean(opts.rotate)
     && JSON.stringify(cp.ats) === JSON.stringify(opts.ats)
     && (cp.limit ?? null) === (opts.limit === Infinity ? null : opts.limit)
     && cp.includeUndated === opts.includeUndated;
@@ -491,7 +493,7 @@ export const SOURCES = {
 const KNOWN_FLAGS = [
   '--since', '--limit', '--ats', '--seeds', '--history-seeds', '--probe-unknown-hosts', '--dry-run', '--liveness',
   '--verbose', '--md-out', '--json', '--include-undated', '--include-blacklisted',
-  '--shuffle', '--resume', '--help', '-h',
+  '--shuffle', '--rotate', '--resume', '--help', '-h',
 ];
 
 // Flags that consume the next argv token as a value (space-separated form —
@@ -506,6 +508,7 @@ const USAGE = `Usage:
   node scan-ats-full.mjs --history-seeds --ats successfactors # history-derived boards for this ATS
   node scan-ats-full.mjs --history-seeds --probe-unknown-hosts # also detect branded SuccessFactors hosts (one GET per unknown host)
   node scan-ats-full.mjs --limit 200          # max companies per ATS (default: all)
+  node scan-ats-full.mjs --limit 200 --rotate # persist successive slices per ATS
   node scan-ats-full.mjs --dry-run            # preview without writing files
   node scan-ats-full.mjs --liveness           # Playwright-verify matches before writing
   node scan-ats-full.mjs --include-blacklisted # audit: let data/blacklist.md matches through, annotated
@@ -616,6 +619,7 @@ export function parseArgs(argv) {
     includeUndated: args.includes('--include-undated'),
     includeBlacklisted: args.includes('--include-blacklisted'),
     shuffle: args.includes('--shuffle'),
+    rotate: args.includes('--rotate') || process.env.CAREER_OPS_ROTATE_FULL === '1',
     resume: args.includes('--resume'),
   };
 }
@@ -1107,6 +1111,37 @@ export function sampleCompanies(list, limit, shuffle = false) {
   return copy.slice(0, limit);
 }
 
+// Reserve a non-wrapping slice. Serialize cursor updates across processes.
+export function reserveRotation(list, limit, name, file) {
+  mkdirSync(path.dirname(file), { recursive: true });
+  const lock = `${file}.lock`;
+  mkdirSync(lock);
+  try {
+    let cursors = {};
+    if (existsSync(file)) {
+      cursors = JSON.parse(readFileSync(file, 'utf-8'));
+      if (!cursors || typeof cursors !== 'object' || Array.isArray(cursors)) throw new Error('Invalid rotation cursor');
+    }
+    const saved = cursors[name] ?? 0;
+    if (!Number.isSafeInteger(saved) || saved < 0) throw new Error('Invalid rotation offset');
+    const start = saved < list.length ? saved : 0;
+    const end = Math.min(start + limit, list.length);
+    cursors[name] = end >= list.length ? 0 : end;
+    const tmp = `${file}.${process.pid}.tmp`;
+    let created = false;
+    try {
+      writeFileSync(tmp, JSON.stringify(cursors), { flag: 'wx' });
+      created = true;
+      renameSyncWithRetry(tmp, file);
+    } finally {
+      if (created && existsSync(tmp)) unlinkSync(tmp);
+    }
+    return { start, end };
+  } finally {
+    rmdirSync(lock);
+  }
+}
+
 /** One stderr JSON line per kept offer in `--json` mode so Explore can paint
  *  cards while the walk continues. Stdout stays the single summary object (#1199). */
 export function formatLiveOfferLine(job, source) {
@@ -1526,6 +1561,8 @@ function isoDay(v) {
 
 async function main() {
   const opts = parseArgs(process.argv);
+  if (opts.rotate && (opts.shuffle || !Number.isFinite(opts.limit))) throw new Error('--rotate requires --limit and cannot be combined with --shuffle');
+  const rotationFile = path.join(DATA_ROOT, 'data/cache/ats-full-cursor.json');
   let checkpoint = null;
   if (opts.resume) {
     const cp = loadCheckpoint();
@@ -1790,12 +1827,15 @@ async function main() {
     noDateSkipCompanies, noDateSkipJobs, cappedBoards,
     domainGatedBoards, domainGatedPostings,
   });
+  const rotationSlices = checkpoint?.rotationSlices || {};
   const checkpointBase = () => ({
     version: 1,
     cutoffMs: cutoff,
     ats: opts.ats,
     limit: opts.limit === Infinity ? null : opts.limit,
     includeUndated: opts.includeUndated,
+    rotate: opts.rotate,
+    rotationSlices,
     filters,
     completedSources: [...completedSources],
     datasets: Object.fromEntries(Object.keys(datasetStatus).map((n) => [n, { status: datasetStatus[n], available: datasetSizes[n] ?? 0 }])),
@@ -1886,7 +1926,18 @@ async function main() {
     // A source that restarts on resume never compares fingerprints, and its
     // list carries every kept posting, so it is not hashed.
     const datasetHash = source.restartOnResume ? null : datasetFingerprint(list);
-    const entriesAll = sampleCompanies(list, opts.limit, opts.shuffle).map(source.toEntry).filter(Boolean);
+    let selected = sampleCompanies(list, opts.limit, opts.shuffle);
+    if (opts.rotate) {
+      const slice = rotationSlices[name] || (opts.dryRun
+        ? { start: 0, end: Math.min(opts.limit, list.length) }
+        : reserveRotation(list, opts.limit, name, rotationFile));
+      rotationSlices[name] = slice;
+      selected = list.slice(slice.start, slice.end);
+      if (!opts.dryRun && checkpoint?.current?.name !== name && !writeCheckpoint({ ...checkpointBase(), current: { name, resumeAt: 0, datasetLen: list.length, datasetHash }, counters: snapshotCounters() })) {
+        throw new Error('Cannot checkpoint rotated slice');
+      }
+    }
+    const entriesAll = selected.map(source.toEntry).filter(Boolean);
 
     let startAt = 0;
     if (checkpoint && checkpoint.current?.name === name && source.restartOnResume) {

@@ -2,6 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseInbox } from "../../src/lib/pipeline-table.mjs";
 
+test("a scan query label does not become location or compensation", () => {
+  for (const location of [undefined, "Remote"]) {
+    const line = `- [ ] https://example.com/j | Acme | Engineer${location ? ` | ${location}` : ""} | query: AI roles`;
+    const [row] = parseInbox(line);
+    assert.equal(row.location, location);
+    assert.equal(row.compensation, undefined);
+    assert.equal(row.company, "Acme");
+    assert.equal(row.role, "Engineer");
+  }
+});
+
 test("a colon inside location or pay stays on the row", () => {
   const [row] = parseInbox(
     "- [ ] https://example.com/j | Acme | Engineer | Hybrid: London | OTE: 180k | posted: 2026-10-01\n",

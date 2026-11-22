@@ -219,7 +219,7 @@ Levels are additive — they are executed in order, and results are merged and d
 6. **Level 3 — WebSearch Queries** (parallel if possible):
    For each query in `search_queries` with `enabled: true` (general queries by portal/role — not dedicated queries for a company with an active local parser):
    a. Execute WebSearch with the defined `query`.
-   b. From each result, extract: `{title, url, company}`.
+   b. From each result, extract: `{title, url, company, queryName}`; set `queryName` to the configured query `name` (or the portal-search name for a portal search).
       - **title**: from the result title (before " @ " or " | ")
       - **url**: URL of the result
       - **company**: after " @ " in the title, or extract from the domain/path
@@ -278,8 +278,8 @@ Levels are additive — they are executed in order, and results are merged and d
    **Do not interrupt the entire scan if a single URL fails.** If `browser_navigate` or parser errors (timeout, 403, crash, etc.), mark as `skipped_error` and continue with the next one.
 
 8. **For each new verified offer that passes filters**:
-   a. Add to the `pipeline.md` "Pending" section: `- [ ] {url} | {company} | {title}`
-   b. Record in `scan-history.tsv` with status `added`. Write the row with `formatScanHistoryRow` / `appendToScanHistory` from `scan.mjs` rather than composing the tab-separated line by hand — the column set has grown and will grow again, and a hand-written row is silently short.
+   a. Add to the `pipeline.md` "Pending" section: `- [ ] {url} | {company} | {title} | query: {queryName}` when a query or portal-search name is known; otherwise omit the query segment
+   b. Record in `scan-history.tsv` with status `added`. Write the row with `formatScanHistoryRow` / `appendToScanHistory` from `scan.mjs` passing the same `queryName` on the offer, rather than composing the tab-separated line by hand — the column set has grown and will grow again, and a hand-written row is silently short.
 
 9. **Offers filtered by title**: record in `scan-history.tsv` with status `skipped_title`.
 10. **Duplicate offers**: record with status `skipped_dup`.
@@ -325,6 +325,7 @@ If a non-publicly accessible URL is found:
 | 14 | `language` | `en-GB` | Language of the posting text as the source names it (a code or a name), when the provider reports it (`Job.language`); empty otherwise. Read by the opt-in `scan_history.dedup_include_language` |
 | 15 | `listing_key` | `listing_v1_…` | Strong local ATS identity key when the provider supplies a complete resolved identity; blank when it cannot |
 | 16 | `closes_at` | `2026-03-31` | Calendar day the posting closes, when the source already carried one. Empty when it did not. |
+| 17 | `query_name` | `AI roles` | Name of the search query or portal search that produced the offer; empty when unknown. |
 
 Columns are append-only: readers index by position, so new columns arrive at the end and older files keep their shorter rows. Never renumber or reorder. The header is written only when the file is created, so an existing file may still carry a shorter header than the rows being appended to it — that is expected, not corruption.
 
@@ -341,7 +342,7 @@ The scanner writes the other statuses in that list itself: `skipped_invalid_url`
 `skipped_dup` lasts as long as whatever made the URL seen. Without `scan_history.recheck_after_days` it counts as seen for good. With that window set, the row follows the URL's other rows here, such as an `added` or `skipped_expired` row or a cooldown: while any of them still pins the URL it stays seen, and once none does, the URL is eligible again however recent its `skipped_dup` rows are, so a repeat sighting never restarts the clock. A `skipped_dup` row with none of those rows here, which is what the agent workflow leaves when the original lives in the tracker or pipeline, ages out by its own `first_seen`. That ends only the row's own pin: a tracker or pipeline entry for the URL keeps it seen as before.
 
 ```tsv
-url	first_seen	portal	title	company	status	location	fingerprint	posted_at	trust_score	trust_flags	normalized_company	requisition_id	language	listing_key	closes_at
+url	first_seen	portal	title	company	status	location	fingerprint	posted_at	trust_score	trust_flags	normalized_company	requisition_id	language	listing_key	closes_at	query_name
 https://...	2026-02-10	Ashby — AI PM	PM AI	Acme	added	Remote	a3f1c8d2e4b70592	2026-02-08			acme			listing_v1_…
 https://...	2026-02-11	ExampleCo	QA Engineer	ExampleCo	added	Hamburg, Germany		2026-02-11			exampleco	REF1234X	de	listing_v1_example	2026-03-31
 ```

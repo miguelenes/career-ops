@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import * as yaml from "js-yaml";
+import { buildLocationFilter } from "../../../scan.mjs";
 
 import {
   emptyScheduledStore,
@@ -147,6 +148,37 @@ test("scheduled overlay falls back to portal title keywords and preserves hard l
     assert.equal(explicit.state, "success");
     assert.deepEqual(overlay.title_filter.positive, ["designer"]);
     assert.deepEqual(overlay.title_filter_full.positive, ["designer"]);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("scheduled overlay applies the portal workplace policy to scanner locations", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "career-ops-scheduled-workplace-"));
+  const policy = { onsite_locations: ["Barcelona"], onsite_countries: ["Spain"], remote_countries: ["Spain"] };
+  fs.writeFileSync(path.join(temp, "portals.yml"), yaml.dump({
+    title_filter: { positive: ["engineer"] },
+    location_filter: { workplace_policy: policy },
+  }), "utf8");
+  try {
+    for (const engine of ["portals", "full"]) {
+      let checked = false;
+      const result = executeJob(temp, {
+        id: "11111111-1111-4111-8111-111111111111", engine, filters: {},
+      }, {
+        spawnFn: (_node, _args, options) => {
+          const overlay = yaml.load(fs.readFileSync(options.env.CAREER_OPS_PORTALS, "utf8"));
+          assert.deepEqual(overlay.location_filter.workplace_policy, policy);
+          const accepts = buildLocationFilter(overlay.location_filter);
+          assert.equal(accepts("Berlin, Germany", "", "Engineer"), false);
+          assert.equal(accepts("Barcelona, Spain", "", "Engineer"), true);
+          checked = true;
+          return { status: 0, stdout: "{}", stderr: "" };
+        },
+      });
+      assert.equal(result.state, "success");
+      assert.equal(checked, true);
+    }
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

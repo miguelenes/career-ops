@@ -165,6 +165,7 @@ function writeJobPortals(root, job) {
     negative: Array.isArray(filters.negative) ? filters.negative : [],
   };
   if (base.title_filter_full) base.title_filter_full = { ...base.title_filter_full, ...base.title_filter };
+  // The portal policy is authoritative; scheduled jobs do not define one.
   base.location_filter = {
     ...(base.location_filter || {}),
     allow: Array.isArray(filters.allow) ? filters.allow : [],

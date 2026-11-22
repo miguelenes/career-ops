@@ -2222,7 +2222,7 @@ const PIPELINE_CHECKBOX_STRICT_RE = /^- \[[ x]\]\s+/;
  * segment invents a city for a role and lets it resurface, while a genuine
  * location beginning `Posted: ` / `Rank: ` does not occur.
  */
-const PIPELINE_LABELED_SEGMENT_RE = /^(?:posted|trust|easy_apply|yrs|note|rank):\s/iu;
+const PIPELINE_LABELED_SEGMENT_RE = /^(?:posted|trust|easy_apply|yrs|note|rank|query):\s/iu;
 
 /**
  * The `~~…~~` wrapper an expired entry is written with.
@@ -3479,6 +3479,8 @@ export function formatPipelineOffer(offer) {
   let line = base;
   if (compensation) line = `${base} | ${location} | ${compensation}`;
   else if (location) line = `${base} | ${location}`;
+  const queryName = typeof offer.queryName === 'string' ? sanitizeMarkdownField(offer.queryName).trim() : '';
+  if (queryName) line = `${line} | query: ${queryName}`;
   // Optional labeled posting-date segment (like note:) — keeps the positional
   // 1/3/4/5-column contract in modes/pipeline.md intact.
   const posted = postedAtIsoDate(offer.postedAt);
@@ -3595,6 +3597,7 @@ export function formatScanHistoryRow(offer, date, status = 'added') {
     language: typeof offer.language === 'string' ? offer.language : '',
     listing_key: typeof offer.listingKey === 'string' ? offer.listingKey : '',
     closes_at: closesAtIso(offer.closesAt) || closesAtIso(offer),
+    query_name: typeof offer.queryName === 'string' ? offer.queryName : '',
   };
   return SCAN_HISTORY_COLUMNS.map((name) => sanitizeTsvField(record[name])).join('\t');
 }

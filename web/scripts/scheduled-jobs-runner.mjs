@@ -206,6 +206,7 @@ export function executeJob(root, job, options = {}) {
           env: {
             ...process.env,
             CAREER_OPS_ROOT: root,
+            CAREER_OPS_ROTATE_FULL: job.engine === "full" ? "1" : "0",
             CAREER_OPS_PORTALS: tempPortals,
             // The scanner runs with cwd = the checkout; a relative override is
             // resolved here, the way the web resolves it, so both read one file.

@@ -50,11 +50,10 @@ test('429 retries once after at least a minute and honors Retry-After', async ()
   }
 });
 
-test('repeated 429, long Retry-After and probes fail soft and suppress subsequent entries', async () => {
+test('repeated 429 and long Retry-After fail soft and suppress subsequent entries', async () => {
   for (const [responses, extra] of [
-    [[httpError(429), httpError(429)], {}],
+    [[httpError(429), httpError(429), httpError(429), httpError(429)], {}],
     [[httpError(429, '3600')], {}],
-    [[httpError(429)], { maxPages: 1 }],
   ]) {
     const { p, ctx, calls } = harness(responses.slice());
     Object.assign(ctx, extra);
@@ -62,6 +61,23 @@ test('repeated 429, long Retry-After and probes fail soft and suppress subsequen
     await assert.rejects(p.fetch(entry, ctx), { code: 'linkedin_guest_blocked' });
     assert.equal(calls.length, responses.length);
   }
+});
+
+test('28 queued queries survive transient rate limits even with a page limit', async () => {
+  const responses = Array.from({ length: 28 }, (_, i) => i < 10 ? [httpError(429), html] : [html]).flat();
+  const { p, ctx, calls, waits } = harness(responses);
+  ctx.maxPages = 1;
+  const results = await Promise.all(Array.from({ length: 28 }, () => p.fetch(entry, ctx)));
+  assert.equal(results.length, 28);
+  assert.ok(results.every(jobs => jobs.length === 2));
+  assert.equal(calls.length, 38);
+  assert.equal(waits.filter(ms => ms === 60_000).length, 10);
+});
+
+test('successive 429s use bounded exponential backoff', async () => {
+  const { p, ctx, waits } = harness([httpError(429), httpError(429), httpError(429), html]);
+  await p.fetch(entry, ctx);
+  assert.deepEqual(waits, [0, 60_000, 120_000, 120_000]);
 });
 
 test('HTTP blocks, redirects, challenge and unexpected HTML are recorded as errors without retry', async () => {
@@ -102,7 +118,7 @@ test('cooldown expires and a failed query does not poison the serial queue', asy
   assert.equal(calls, 2);
 });
 
-test('configured guest search parameters pass through without fetching returned links', async () => {
+test('remote parameter passes through; guest response does not prove server filtering', async () => {
   const { p, ctx, calls } = harness([html]);
   const url = `${provider.detect(entry).url}?keywords=AI%20Engineer&location=Portugal&f_WT=2`;
   await p.fetch({ ...entry, api: url }, ctx);

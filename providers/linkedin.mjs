@@ -7,6 +7,8 @@ import { htmlToText } from './_html-to-text.mjs';
 const ENDPOINT = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const INTERVAL = 5_000;
 const COOLDOWN = 15 * 60_000;
+const RETRIES = 3;
+const MAX_RETRY_DELAY = 120_000;
 
 export function parseLinkedInGuest(html) {
   const jobs = [];
@@ -44,8 +46,13 @@ export function createLinkedInProvider({ now = Date.now, sleep = sharedSleep } =
           || url.username || url.password || [...url.searchParams.keys()].some(key => !['keywords', 'location', 'geoId', 'f_TPR', 'f_WT'].includes(key))) {
           throw new Error('linkedin: only public guest search queries are supported');
         }
+        if (url.searchParams.get('f_WT') === '2') {
+          console.warn('linkedin: remote filter requested; guest results do not verify workplace type');
+        }
         // One result page per configured query: deliberately no detail fan-out.
-        for (let attempt = 0; attempt < 2; attempt++) {
+        // f_WT passes through when requested, but guest cards do not reliably
+        // expose workplace type, so server-side filtering cannot be verified here.
+        for (let attempt = 0; attempt <= RETRIES; attempt++) {
           if (now() < blockedUntil) throw blocked('previous block', blockedUntil - now());
           await sleep(Math.max(0, nextRequest - now()));
           nextRequest = now() + INTERVAL;
@@ -54,11 +61,13 @@ export function createLinkedInProvider({ now = Date.now, sleep = sharedSleep } =
             html = await ctx.fetchText(url.href, { redirect: 'manual', headers: { 'User-Agent': BROWSER_LIKE_USER_AGENT } });
           } catch (error) {
             if (error.status === 429) {
-              const seconds = Number(error.retryAfter);
-              const date = Date.parse(error.retryAfter);
-              const delay = Math.max(60_000, Number.isFinite(seconds) ? seconds * 1000 : Number.isFinite(date) ? date - now() : 0);
-              if (attempt === 0 && delay <= 120_000 && !ctx.maxPages) {
-                nextRequest = now() + delay;
+              const header = error.retryAfter;
+              const seconds = typeof header === 'string' && /^\s*\d+\s*$/.test(header) ? Number(header) * 1000 : null;
+              const date = typeof header === 'string' ? Date.parse(header) : NaN;
+              const delay = seconds ?? (Number.isFinite(date) ? Math.max(0, date - now()) : null)
+                ?? Math.min(60_000 * 2 ** attempt, MAX_RETRY_DELAY);
+              if (attempt < RETRIES && delay <= MAX_RETRY_DELAY) {
+                nextRequest = Math.max(nextRequest, now() + delay);
                 continue;
               }
               throw blocked('HTTP 429', Math.max(COOLDOWN, delay));

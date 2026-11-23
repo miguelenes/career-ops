@@ -14,8 +14,8 @@ import { citySlug } from './_city-slug.mjs';
 // see the cards. robots.txt (fetched 2026-08-23) disallows only
 // `/subscriptions/new`, a candidate-facing subscription page this provider
 // never requests. The TopCV/VietnamWorks family of Vietnamese boards is
-// Cloudflare- or Vue-rendered and needs a browser; ITviec does not, which is
-// what makes it the right zero-auth entry point for the Vietnamese market.
+// Cloudflare- or Vue-rendered and needs a browser. When ITviec serves HTTP
+// 403, the provider can use indexed public postings as a limited fallback.
 //
 // PARSING CONTRACT. Markup-based extraction rots, so the anchors here are the
 // things a redesign is least likely to change:
@@ -39,7 +39,7 @@ import { visibleText } from './_html-to-text.mjs';
 export { visibleText } from './_html-to-text.mjs';
 
 const TRUSTED_HOST = 'itviec.com';
-const LIST_URL = 'https://itviec.com/it-jobs';
+const LIST_URL = `https://${TRUSTED_HOST}/it-jobs`;
 
 /** Pages are 20 postings; 10 covers the freshest slice of the board. */
 const DEFAULT_MAX_PAGES = 10;
@@ -229,6 +229,70 @@ export function assertParsedSomething(html, url) {
   );
 }
 
+// Send a public board query. Apply the user's keyword and city filters locally.
+const WEB_SEARCH_URL = 'https://html.duckduckgo.com/html/?q=site%3Aitviec.com%2Fit-jobs';
+const RESULT_TITLE_RE = /<a\b(?=[^>]*\bclass=["'][^"']*\bresult__a\b[^"']*["'])[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+const RESULT_SNIPPET_RE = /<(?:a|div)\b[^>]*\bclass=["'][^"']*\bresult__snippet\b[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/i;
+const POSTING_PATH_RE = /^\/it-jobs\/([a-z0-9-]+-\d+)\/?$/;
+const INDEXED_CITIES = [
+  { name: 'Ho Chi Minh', match: /\b(ho chi minh|hcm)\b/ },
+  { name: 'Ha Noi', match: /\b(ha noi|hanoi)\b/ },
+  { name: 'Da Nang', match: /\b(da nang|danang)\b/ },
+];
+
+/** @param {string} href */
+function indexedPostingSlug(href) {
+  try {
+    let url = new URL(decodeEntities(href), WEB_SEARCH_URL);
+    if (['duckduckgo.com', 'html.duckduckgo.com'].includes(url.hostname) && url.pathname === '/l/') {
+      url = new URL(url.searchParams.get('uddg') ?? '');
+    }
+    if (url.origin === `https://${TRUSTED_HOST}` && !url.username && !url.password) {
+      return POSTING_PATH_RE.exec(url.pathname)?.[1];
+    }
+  } catch {
+    // Malformed result links are untrusted input.
+  }
+}
+
+/** @param {string} text */
+function normalizeSearchText(text) {
+  return text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+/**
+ * Search snippets can be stale. Only use fields present in each result and
+ * leave posting dates to the direct listing.
+ * @param {string} html
+ * @param {{ searchKeywords?: string, searchLocation?: string }} entry
+ */
+function parseWebSearchResults(html, entry) {
+  const results = [...html.matchAll(RESULT_TITLE_RE)];
+  const jobs = new Map();
+  const keywords = normalizeSearchText(String(entry?.searchKeywords ?? '').trim()).split(/\s+/).filter(Boolean);
+  const requestedCity = cityPath(entry?.searchLocation);
+
+  for (const [index, result] of results.entries()) {
+    const slug = indexedPostingSlug(result[1]);
+    if (!slug || jobs.has(slug)) continue;
+
+    const label = visibleText(result[2]).replace(/\s*\|\s*ITviec(?:\.com)?\s*$/i, '');
+    const [, title, company = ''] = /^(.*?)(?:\s+at\s+(.+))?$/i.exec(label) ?? [];
+    if (!title) continue;
+
+    const card = html.slice(result.index + result[0].length, results[index + 1]?.index);
+    const snippet = normalizeSearchText(visibleText(RESULT_SNIPPET_RE.exec(card)?.[1] ?? ''));
+    const cities = INDEXED_CITIES.filter(({ match }) => match.test(snippet)).map(({ name }) => name);
+    if (requestedCity && !cities.some((city) => cityPath(city) === requestedCity)) continue;
+    const searchable = normalizeSearchText(`${label} ${snippet}`);
+    if (!keywords.every((keyword) => searchable.includes(keyword))) continue;
+
+    jobs.set(slug, { title, company, url: `${LIST_URL}/${slug}`, location: cities.join(', ') });
+  }
+
+  return [...jobs.values()];
+}
+
 /** @type {Provider} */
 export default {
   id: 'itviec',
@@ -256,10 +320,24 @@ export default {
       if (page > 1) await sleep(INTER_PAGE_DELAY_MS, ctx);
 
       const url = assertItviecUrl(buildListUrl(entry, page));
-      const html = await fetchTextWithRetry(ctx, url, {
-        headers: { 'User-Agent': BROWSER_LIKE_USER_AGENT },
-        redirect: 'error',
-      });
+      let html;
+      try {
+        html = await fetchTextWithRetry(ctx, url, {
+          headers: { 'User-Agent': BROWSER_LIKE_USER_AGENT },
+          redirect: 'error',
+        });
+      } catch (error) {
+        if (error?.status !== 403) throw error;
+
+        const searchHtml = await fetchTextWithRetry(ctx, WEB_SEARCH_URL, { redirect: 'error' });
+        const indexed = parseWebSearchResults(searchHtml, entry);
+        if (indexed.length === 0) {
+          throw Object.assign(new Error('itviec: HTTP 403 and web search returned no usable matches', {
+            cause: error,
+          }), { status: 403 });
+        }
+        return [...jobs, ...indexed.filter((job) => !seen.has(job.url))];
+      }
 
       const parsed = parseListingPage(html);
       if (parsed.length === 0) {

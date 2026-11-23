@@ -17,6 +17,7 @@
 // The last group is the important one: a listing page that parses to nothing
 // must THROW. Returning [] would render a broken parser as a board with no
 // openings — indistinguishable from a healthy quiet board.
+import assert from 'node:assert/strict';
 import { pass, fail, ROOT } from '../helpers.mjs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -439,6 +440,102 @@ try {
   } else {
     fail('a markup change must surface as an error, not as a board with no jobs');
   }
+
+  // Search engine markup with invented postings and employers.
+  const searchUrl = 'https://html.duckduckgo.com/html/?q=site%3Aitviec.com%2Fit-jobs';
+  const posting = 'https://itviec.com/it-jobs/backend-engineer-example-7142';
+  const redirect = `//duckduckgo.com/l/?uddg=${encodeURIComponent(`${posting}?tracking=1`)}&amp;rut=example`;
+  const resultsHtml = `
+    <a class="result__a" href="${redirect}">Backend Engineer at Example &amp; Co | ITviec</a>
+    <a class="result__snippet">Hà Nội. Posted 1 day ago.</a>
+    <a class="result__a" href="${posting}#top">Duplicate</a>
+    <a class="result__a" href="https://itviec.com/it-jobs/backend">Category</a>
+    <a class="result__a" href="https://itviec.com.example.org/it-jobs/backend-engineer-9999">Wrong host</a>
+    <a class="result__a" href="https://itviec.com/it-jobs/other-example-8306">Backend Engineer | ITviec</a>
+    <a class="result__snippet">Da Nang</a>
+    <a class="result__a" href="https://itviec.com/it-jobs/frontend-hanoi-1638">Frontend Engineer | ITviec</a>
+    <a class="result__snippet">Ha Noi</a>
+    <a class="result__a" href="https://itviec.com/it-jobs/backend-without-city-8756">Backend Engineer | ITviec</a>
+  `;
+  const blocked = Object.assign(new Error('HTTP 403 Forbidden'), { status: 403 });
+  const unavailable = Object.assign(new Error('HTTP 500'), { status: 500 });
+  const fallbackEntry = { searchKeywords: 'Backend', searchLocation: 'Hà Nội' };
+  const directUrl = 'https://itviec.com/it-jobs/backend/ha-noi';
+  const fallbackRequests = [];
+  const blockedCtx = {
+    sleep: async () => {},
+    fetchText: async (url, options) => {
+      fallbackRequests.push(url);
+      assert.equal(options.redirect, 'error');
+      if (url === directUrl) throw blocked;
+      assert.equal(url, searchUrl);
+      return resultsHtml;
+    },
+  };
+  assert.deepEqual(await itviec.fetch(fallbackEntry, blockedCtx), [{
+    title: 'Backend Engineer',
+    url: posting,
+    company: 'Example & Co',
+    location: 'Ha Noi',
+  }]);
+  assert.deepEqual(fallbackRequests, [directUrl, searchUrl]);
+  pass('HTTP 403 triggers one fixed public web search and applies entry filters locally');
+
+  const mixed = await itviec.fetch(fallbackEntry, {
+    ...blockedCtx,
+    maxPages: 2,
+    fetchText: async (url) => {
+      if (url === directUrl) return PAGE;
+      if (url === searchUrl) return resultsHtml;
+      assert.equal(url, `${directUrl}?page=2`);
+      throw blocked;
+    },
+  });
+  assert.deepEqual(mixed.map((job) => job.url), [...jobs.map((job) => job.url), posting]);
+  pass('a later 403 adds indexed matches to the direct listings already found');
+
+  const boardWide = await itviec.fetch({}, {
+    ...blockedCtx,
+    fetchText: async (url) => {
+      if (url === searchUrl) return resultsHtml;
+      throw blocked;
+    },
+  });
+  assert.equal(boardWide.length, 4);
+  assert.deepEqual(boardWide.at(-1), {
+    title: 'Backend Engineer',
+    url: 'https://itviec.com/it-jobs/backend-without-city-8756',
+    company: '',
+    location: '',
+  });
+  pass('indexed results deduplicate canonical posting URLs and omit unsupported metadata');
+
+  await assert.rejects(itviec.fetch(fallbackEntry, {
+    ...blockedCtx,
+    fetchText: async (url) => {
+      assert.equal(url, directUrl);
+      throw unavailable;
+    },
+  }), (error) => error === unavailable);
+  pass('non-403 errors propagate without a web search');
+
+  for (const searchResponse of ['<html>Search challenge</html>', resultsHtml]) {
+    await assert.rejects(itviec.fetch({ searchKeywords: 'missing keyword' }, {
+      ...blockedCtx,
+      fetchText: async (url) => {
+        if (url === searchUrl) return searchResponse;
+        throw blocked;
+      },
+    }), { status: 403, cause: blocked, message: /web search returned no usable matches/ });
+  }
+  pass('blocked or irrelevant search results preserve the authorization failure');
+
+  await assert.rejects(itviec.fetch(fallbackEntry, {
+    ...blockedCtx,
+    fetchText: async (url) => { throw url === searchUrl ? unavailable : blocked; },
+  }), (error) => error === unavailable);
+  pass('search request failures propagate');
+
 } catch (error) {
   fail(`itviec provider tests could not run: ${error.message}`);
 }
